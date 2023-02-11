@@ -5,7 +5,11 @@ VisualStudioVersion = 17.4.33213.308
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "DataStructures", "DataStructures", "{15019BBE-91A6-4E9A-9BF0-D09A334051F0}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Noob.DataStructures", "Noob.DataStructures\Noob.DataStructures.csproj", "{EAEDFA7B-8363-469C-AE35-663D71BB2B46}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Noob.DataStructures", "Noob.DataStructures\Noob.DataStructures.csproj", "{EAEDFA7B-8363-469C-AE35-663D71BB2B46}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Algorithms", "Algorithms", "{ABF42E7E-0A80-4936-85D4-F234B0CB0312}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Noob.Algorithms", "Noob.Algorithms\Noob.Algorithms.csproj", "{5CAE4633-7513-42AA-881D-D58757C9D001}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -17,12 +21,17 @@ Global
 		{EAEDFA7B-8363-469C-AE35-663D71BB2B46}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{EAEDFA7B-8363-469C-AE35-663D71BB2B46}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{EAEDFA7B-8363-469C-AE35-663D71BB2B46}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5CAE4633-7513-42AA-881D-D58757C9D001}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5CAE4633-7513-42AA-881D-D58757C9D001}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5CAE4633-7513-42AA-881D-D58757C9D001}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5CAE4633-7513-42AA-881D-D58757C9D001}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{EAEDFA7B-8363-469C-AE35-663D71BB2B46} = {15019BBE-91A6-4E9A-9BF0-D09A334051F0}
+		{5CAE4633-7513-42AA-881D-D58757C9D001} = {ABF42E7E-0A80-4936-85D4-F234B0CB0312}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {80C351AC-0FF3-40AC-9866-3B801D7E0A9E}
