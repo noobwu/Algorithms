@@ -80,23 +80,6 @@ namespace Noob.Cryptos
             Assert.AreNotEqual(client_secret, ciphertext);
         }
 
-        /// <summary>
-        /// Defines the test method PubEncrypt.
-        /// </summary>
-        [TestCase]
-        public void PriDecrypt()
-        {
-            var ciphertext = PubEncrypt(pubKey, client_secret);
-            Console.WriteLine($"PriDecrypt#PubEncrypt,client_secret:{client_secret}");
-            Console.WriteLine($"PriDecrypt#PubEncrypt,pubKey:{pubKey}");
-            Console.WriteLine($"PriDecrypt#PubEncrypt,ciphertext:{ciphertext}");
-            Assert.AreNotEqual(client_secret, ciphertext);
-
-            var decryptText = PriDecrypt(priKey, ciphertext);
-            Console.WriteLine($"PriDecrypt,decryptText:{decryptText}");
-
-            Assert.AreEqual(client_secret, decryptText);
-        }
 
         /// <summary>
         /// RSAs the encrypt.
@@ -152,6 +135,23 @@ namespace Noob.Cryptos
             return target;
         }
 
+        /// <summary>
+        /// Defines the test method PubEncrypt.
+        /// </summary>
+        [TestCase]
+        public void PriDecrypt()
+        {
+            var ciphertext = PubEncrypt(pubKey, client_secret);
+            Console.WriteLine($"PriDecrypt#PubEncrypt,client_secret:{client_secret}");
+            Console.WriteLine($"PriDecrypt#PubEncrypt,pubKey:{pubKey}");
+            Console.WriteLine($"PriDecrypt#PubEncrypt,ciphertext:{ciphertext}");
+            Assert.AreNotEqual(client_secret, ciphertext);
+
+            var decryptText = PriDecrypt(priKey, ciphertext);
+            Console.WriteLine($"PriDecrypt,decryptText:{decryptText}");
+
+            Assert.AreEqual(client_secret, decryptText);
+        }
         // RSA最大解密密文大小
         private const  int MAX_DECRYPT_BLOCK = 256;
 
