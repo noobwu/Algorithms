@@ -71,12 +71,31 @@ namespace Noob.Cryptos
         /// Defines the test method PubEncrypt.
         /// </summary>
         [TestCase]
-        public void PubEncrypt() {
+        public void PubEncrypt()
+        {
             var ciphertext = PubEncrypt(pubKey, client_secret);
             Console.WriteLine($"PubEncrypt,client_secret:{client_secret}");
             Console.WriteLine($"PubEncrypt,pubKey:{pubKey}");
             Console.WriteLine($"PubEncrypt,ciphertext:{ciphertext}");
-            Assert.AreNotEqual(client_secret,ciphertext);
+            Assert.AreNotEqual(client_secret, ciphertext);
+        }
+
+        /// <summary>
+        /// Defines the test method PubEncrypt.
+        /// </summary>
+        [TestCase]
+        public void PriDecrypt()
+        {
+            var ciphertext = PubEncrypt(pubKey, client_secret);
+            Console.WriteLine($"PriDecrypt#PubEncrypt,client_secret:{client_secret}");
+            Console.WriteLine($"PriDecrypt#PubEncrypt,pubKey:{pubKey}");
+            Console.WriteLine($"PriDecrypt#PubEncrypt,ciphertext:{ciphertext}");
+            Assert.AreNotEqual(client_secret, ciphertext);
+
+            var decryptText = PriDecrypt(priKey, ciphertext);
+            Console.WriteLine($"PriDecrypt,decryptText:{decryptText}");
+
+            Assert.AreEqual(client_secret, decryptText);
         }
 
         /// <summary>
@@ -128,10 +147,61 @@ namespace Noob.Cryptos
             }
             finally
             {
-                if (outStream != null)
+                outStream?.Close();
+            }
+            return target;
+        }
+
+        // RSA最大解密密文大小
+        private const  int MAX_DECRYPT_BLOCK = 256;
+
+        /// <summary>
+        /// Pris the decrypt.
+        /// </summary>
+        /// <param name="priKey">The pri key.</param>
+        /// <param name="src">The source.</param>
+        /// <returns>System.String.</returns>
+        /// <exception cref="System.Exception">解密失败" + e.Message</exception>
+        public string PriDecrypt(string priKey, string src)
+        {
+            string target = null;
+            MemoryStream outStream = null;
+            try
+            {
+                AsymmetricKeyParameter key = PrivateKeyFactory.CreateKey(Convert.FromBase64String(priKey));
+
+                IBufferedCipher cipher = CipherUtilities.GetCipher("RSA/ECB/OAEPWithSHA-256AndMGF1Padding");
+                cipher.Init(false, key);
+                byte[] data = Convert.FromBase64String(src);
+                int inputLen = data.Length;
+                outStream = new MemoryStream();
+                int offSet = 0;
+                byte[] cache;
+                int i = 0;
+                // 对数据分段解密
+                while (inputLen - offSet > 0)
                 {
-                    outStream.Close();
+                    if (inputLen - offSet > MAX_DECRYPT_BLOCK)
+                    {
+                        cache = cipher.DoFinal(data, offSet, MAX_DECRYPT_BLOCK);
+                    }
+                    else
+                    {
+                        cache = cipher.DoFinal(data, offSet, inputLen - offSet);
+                    }
+                    outStream.Write(cache, 0, cache.Length);
+                    i++;
+                    offSet = i * MAX_DECRYPT_BLOCK;
                 }
+                target = Encoding.UTF8.GetString(outStream.ToArray());
+            }
+            catch (Exception e)
+            {
+                throw new Exception("解密失败" + e.Message);
+            }
+            finally
+            {
+                outStream?.Close();
             }
             return target;
         }
