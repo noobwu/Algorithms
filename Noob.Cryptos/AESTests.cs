@@ -54,27 +54,26 @@ namespace Noob.Cryptos
             charset = "UTF-8";
         }
         /// <summary>
-        /// Defines the test method SymEncrypt.
+        /// Defines the test method CTREncrypt.
         /// </summary>
         [TestCase]
-        public void SymEncrypt() {
+        public void CTREncrypt() {
             string security_key = "ByWelFHCgFqivFZrWs89LQ==";
             string source = "123456";
-            var ciphertext = SymEncrypt(security_key, source);
-            Console.WriteLine($"SymEncrypt,ciphertext:{ciphertext},source:{source},security_key:{security_key}");
+            var ciphertext = CTREncrypt(security_key, source);
+            Console.WriteLine($"CTREncrypt,ciphertext:{ciphertext},source:{source},security_key:{security_key}");
             Assert.AreNotEqual(source,ciphertext);
         }
 
         /// <summary>
-        /// Syms the encrypt.
+        /// CTRs the encrypt.
         /// </summary>
         /// <param name="base64Key">The base64 key.</param>
         /// <param name="src">The source.</param>
         /// <returns>System.String.</returns>
-        /// <exception cref="System.Exception">加密失败" + e.Message</exception>
-        public static string SymEncrypt(string base64Key, string src)
+        /// <exception cref="System.Exception">加密失败,{e.Message}</exception>
+        public string CTREncrypt(string base64Key, string src)
         {
-            string target = null;
             try
             {
                 KeyParameter key = new KeyParameter(Convert.FromBase64String(base64Key));
@@ -84,41 +83,39 @@ namespace Noob.Cryptos
                 ParametersWithIV ivParams = new ParametersWithIV(key, ivData);
                 cipher.Init(true, ivParams);
                 byte[] encodeResult = cipher.DoFinal(Encoding.UTF8.GetBytes(src));
-                target = Convert.ToBase64String(encodeResult);
+                return Convert.ToBase64String(encodeResult);
             }
             catch (Exception e)
             {
-                throw new Exception("加密失败" + e.Message);
+                throw new Exception($"加密失败,{e.Message}");
             }
-            return target;
         }
 
 
         /// <summary>
-        /// Defines the test method SymEncrypt.
+        /// Defines the test method CTRDecrypt.
         /// </summary>
         [TestCase]
-        public void SymDecrypt()
+        public void CTRDecrypt()
         {
             string security_key = "ByWelFHCgFqivFZrWs89LQ==";
             string source = "123456";
-            var ciphertext = SymEncrypt(security_key, source);
-            Console.WriteLine($"SymDecrypt#SymEncrypt,ciphertext:{ciphertext},source:{source},security_key:{security_key}");
+            var ciphertext = CTREncrypt(security_key, source);
+            Console.WriteLine($"CTRDecrypt#SymEncrypt,ciphertext:{ciphertext},source:{source},security_key:{security_key}");
             Assert.AreNotEqual(source, ciphertext);
-            var decryptText = SymDecrypt(security_key, ciphertext);
-            Console.WriteLine($"SymDecrypt,decryptText:{decryptText}");
+            var decryptText = CTRDecrypt(security_key, ciphertext);
+            Console.WriteLine($"CTRDecrypt,decryptText:{decryptText}");
             Assert.AreEqual(source, decryptText);
         }
         /// <summary>
-        /// Syms the decrypt.
+        /// CTRs the decrypt.
         /// </summary>
         /// <param name="base64Key">The base64 key.</param>
         /// <param name="src">The source.</param>
         /// <returns>System.String.</returns>
-        /// <exception cref="System.Exception">解密失败" + e.Message</exception>
-        public string SymDecrypt(string base64Key, string src)
+        /// <exception cref="System.Exception">解密失败,{e.Message}</exception>
+        public string CTRDecrypt(string base64Key, string src)
         {
-            string target = null;
             try
             {
                 byte[] keyBytes = Convert.FromBase64String(base64Key);
@@ -129,13 +126,12 @@ namespace Noob.Cryptos
                 IBufferedCipher cipher = CipherUtilities.GetCipher("AES/CTR/NoPadding");
                 cipher.Init(false, param);
                 byte[] decodeResult = cipher.DoFinal(Convert.FromBase64String(src));
-                target = Encoding.UTF8.GetString(decodeResult);
+                return Encoding.UTF8.GetString(decodeResult);
             }
             catch (Exception e)
             {
-                throw new Exception("解密失败" + e.Message);
+                throw new Exception($"解密失败,{e.Message}");
             }
-            return target;
         }
     }
 }
