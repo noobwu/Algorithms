@@ -25,7 +25,7 @@ namespace Noob.Algorithms.Polly.Contrib.WaitAndRetry
     /// <summary>
     /// Class Backoff.
     /// </summary>
-    partial class Backoff // .AwsDecorrelatedJitter
+    public partial class Backoff // .AwsDecorrelatedJitter
     {
         /// <summary>
         /// Generates sleep durations in an jittered manner, making sure to mitigate any correlations.
