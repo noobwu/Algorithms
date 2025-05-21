@@ -172,7 +172,7 @@ namespace Noob.Algorithms
                 {
                     // 不选第i-1件物品
                     dp[i, w] = dp[i - 1, w];
-                    // 选第i-1件物品
+                    // 选第i-1件物品（能装下时）
                     if (w >= weights[i - 1])
                     {
                         dp[i, w] = Math.Max(dp[i, w], dp[i - 1, w - weights[i - 1]] + values[i - 1]);
@@ -180,6 +180,39 @@ namespace Noob.Algorithms
                 }
             }
             return dp[itemCount, capacity];
+        }
+
+        /// <summary>
+        /// 计算0-1背包问题的最大价值（空间优化：一维动态规划）
+        /// </summary>
+        /// <param name="weights">每个物品的重量数组</param>
+        /// <param name="values">每个物品的价值数组</param>
+        /// <param name="capacity">背包最大承重</param>
+        /// <returns>最大可获得的总价值</returns>
+        /// <exception cref="ArgumentNullException"></exception>
+        /// <exception cref="ArgumentException"></exception>
+        public static int KnapsackDPOptimized(int[] weights, int[] values, int capacity)
+        {
+            if (weights == null) throw new ArgumentNullException(nameof(weights));
+            if (values == null) throw new ArgumentNullException(nameof(values));
+            if (weights.Length != values.Length)
+                throw new ArgumentException("weights和values数组长度必须一致");
+            if (capacity < 0)
+                throw new ArgumentException("背包容量不能为负数", nameof(capacity));
+
+            int itemCount = weights.Length;
+            int[] dp = new int[capacity + 1];
+
+            for (int i = 0; i < itemCount; i++)
+            {
+                // 注意：一维DP必须从大到小逆序遍历容量，避免状态被提前覆盖
+                for (int w = capacity; w >= weights[i]; w--)
+                {
+                    dp[w] = Math.Max(dp[w], dp[w - weights[i]] + values[i]);
+                }
+            }
+
+            return dp[capacity];
         }
 
     }
@@ -297,6 +330,21 @@ namespace Noob.Algorithms
             int capacity = 5;//背包总容量
             int expected = 22; //最大化价值(10+12=22)
             int maxValue = RecursionSamples.KnapsackDP(weights, values, capacity);
+            Assert.AreEqual(expected, maxValue);
+        }
+
+
+        /// <summary>
+        /// Defines the test method Test_KnapsackDPOptimized.
+        /// </summary>
+        [Test]
+        public void Test_KnapsackDPOptimized()
+        {
+            int[] weights = { 1, 2, 3 };//每个物品的重量
+            int[] values = { 6, 10, 12 };//每个物品的价值
+            int capacity = 5;//背包总容量
+            int expected = 22; //最大化价值(10+12=22)
+            int maxValue = RecursionSamples.KnapsackDPOptimized(weights, values, capacity);
             Assert.AreEqual(expected, maxValue);
         }
     }
