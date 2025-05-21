@@ -147,6 +147,41 @@ namespace Noob.Algorithms
             return Dfs(weights.Length - 1, capacity);
         }
 
+        /// <summary>
+        /// 计算0-1背包的最大价值（二维动态规划法）
+        /// </summary>
+        /// <param name="weights">每个物品的重量</param>
+        /// <param name="values">每个物品的价值</param>
+        /// <param name="capacity">背包总容量</param>
+        /// <returns>最大可获得的价值</returns>
+        public static int KnapsackDP(int[] weights, int[] values, int capacity)
+        {
+            if (weights == null || values == null)
+                throw new ArgumentNullException("weights/values不能为null");
+            if (weights.Length != values.Length)
+                throw new ArgumentException("weights与values长度不一致");
+            if (capacity < 0)
+                throw new ArgumentException("容量不能为负数");
+
+            int itemCount = weights.Length;
+            int[,] dp = new int[itemCount + 1, capacity + 1];
+
+            for (int i = 1; i <= itemCount; i++)
+            {
+                for (int w = 0; w <= capacity; w++)
+                {
+                    // 不选第i-1件物品
+                    dp[i, w] = dp[i - 1, w];
+                    // 选第i-1件物品
+                    if (w >= weights[i - 1])
+                    {
+                        dp[i, w] = Math.Max(dp[i, w], dp[i - 1, w - weights[i - 1]] + values[i - 1]);
+                    }
+                }
+            }
+            return dp[itemCount, capacity];
+        }
+
     }
 
 
@@ -248,6 +283,20 @@ namespace Noob.Algorithms
             int capacity = 5;//背包总容量
             int expected = 22; //最大化价值(10+12=22)
             int maxValue = RecursionSamples.KnapsackMemo(weights, values, capacity);
+            Assert.AreEqual(expected, maxValue);
+        }
+
+        /// <summary>
+        /// Defines the test method Test_KnapsackDP.
+        /// </summary>
+        [Test]
+        public void Test_KnapsackDP()
+        {
+            int[] weights = { 1, 2, 3 };//每个物品的重量
+            int[] values = { 6, 10, 12 };//每个物品的价值
+            int capacity = 5;//背包总容量
+            int expected = 22; //最大化价值(10+12=22)
+            int maxValue = RecursionSamples.KnapsackDP(weights, values, capacity);
             Assert.AreEqual(expected, maxValue);
         }
     }
