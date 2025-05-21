@@ -175,114 +175,53 @@ namespace Noob.Algorithms
     }
 
     /// <summary>
-    /// Class CouponOptimizer.
+    /// 优惠券自动优化器：计算订单最优优惠组合。
     /// </summary>
-    public class CouponOptimizer {
-
+    public class CouponOptimizer
+    {
         /// <summary>
         /// 自动选择最大优惠券组合
         /// </summary>
+        /// <param name="order">订单对象</param>
+        /// <param name="availableCoupons">可用优惠券列表</param>
+        /// <returns>最优优惠应用结果</returns>
         public static CouponApplyResult SelectBestCoupons(Order order, List<Coupon> availableCoupons)
         {
             if (order == null) throw new ArgumentNullException(nameof(order));
             if (availableCoupons == null) throw new ArgumentNullException(nameof(availableCoupons));
 
-            // Step1: 过滤可用券
-            var validCoupons = availableCoupons?.FindAll(c => c.IsValidFor(order));
+            var validCoupons = availableCoupons.Where(c => c.IsValidFor(order)).ToList();
             var bestResult = new CouponApplyResult { SavedAmount = 0, PayableAmount = order.TotalAmount };
 
-            // Step2: 按可叠加性拆组，生成全部候选组合（简单枚举：所有不可叠加券+所有叠加券，及单独所有叠加券）
-            var stackable = validCoupons?.FindAll(c => c.IsStackable)??new List<Coupon>();
-            var nonStackable = validCoupons?.FindAll(c => !c.IsStackable)??new List<Coupon>();
+            // 分组
+            var stackableCoupons = validCoupons.Where(c => c.IsStackable).ToList();
+            var nonStackableCoupons = validCoupons.Where(c => !c.IsStackable).ToList();
 
-            var allCandidates = new List<List<Coupon>>();
-            foreach (var single in nonStackable)
-                allCandidates.Add(new List<Coupon> { single }.Concat(stackable).ToList());
-            allCandidates.Add(stackable);
+            // 所有候选组合（非叠加券+叠加券，或只用叠加券）
+            var allCandidates = BuildAllCouponCombinations(stackableCoupons, nonStackableCoupons);
 
             foreach (var coupons in allCandidates)
             {
                 var distinctCoupons = coupons.Distinct().ToList();
-                if (distinctCoupons.Count == 0) continue;
+                if (!distinctCoupons.Any()) continue;
+
+                // 复制购物车（避免券应用副作用）
+                var itemsCopy = order.Items.Select(item => CloneOrderItem(item)).ToList();
 
                 decimal saved = 0;
-                decimal payable = order.TotalAmount;
 
-                // 为每个组合深复制购物车，避免相互影响
-                var itemsCopy = order.Items.Select(i => new OrderItem
-                {
-                    ProductId = i.ProductId,
-                    Price = i.Price,
-                    Quantity = i.Quantity
-                }).ToList();
+                // 处理券类型
+                ApplyGiftCoupons(distinctCoupons, itemsCopy, ref saved);
+                ApplySpecialPriceCoupons(distinctCoupons, itemsCopy, ref saved);
+                ApplyDiscountCoupons(distinctCoupons, itemsCopy, ref saved);
+                ApplyCashCoupons(distinctCoupons, itemsCopy, ref saved);
 
-                // Step3: 先处理Gift券（兑换券）
-                foreach (var coupon in distinctCoupons.Where(c => c.Type == CouponType.Gift))
-                {
-                    foreach (var item in itemsCopy)
-                    {
-                        if (coupon.ApplicableProductIds != null &&
-                            coupon.ApplicableProductIds.Contains(item.ProductId) &&
-                            item.Quantity > 0)
-                        {
-                            // 假设一张券只能兑换一件
-                            var redeemQty = 1;
-                            var redeemValue = Math.Min(item.Quantity, redeemQty) * item.Price;
-                            saved += redeemValue;
-                            item.Quantity -= redeemQty;
-                            break;
-                        }
-                    }
-                }
+                // 计算实际应付
+                decimal payable = Math.Max(order.TotalAmount - saved, 0);
 
-                // Step4: 再处理SpecialPrice券（特价券）
-                foreach (var coupon in distinctCoupons.Where(c => c.Type == CouponType.SpecialPrice))
-                {
-                    var item = itemsCopy.FirstOrDefault(i => coupon.ApplicableProductIds?.Contains(i.ProductId)??false);
-                    if (item != null && coupon.SpecialPrice.HasValue && item.Price > coupon.SpecialPrice.Value)
-                    {
-                        saved += (item.Price - coupon.SpecialPrice.Value) * item.Quantity;
-                        item.Price = coupon.SpecialPrice.Value;
-                    }
-                }
 
-                // Step5: 再处理Discount券（折扣券，通常只允许同一商品单张生效）
-                var discountCoupon = distinctCoupons.Where(c => c.Type == CouponType.Discount)
-                                                    .OrderBy(c => c.DiscountRate).FirstOrDefault();
-                if (discountCoupon != null && discountCoupon.DiscountRate > 0 && discountCoupon.DiscountRate < 1)
-                {
-                    var discountAmount = itemsCopy
-                        .Where(i => discountCoupon.ApplicableProductIds == null || discountCoupon.ApplicableProductIds.Count == 0 || discountCoupon.ApplicableProductIds.Contains(i.ProductId))
-                        .Sum(i => i.Price * i.Quantity * (1 - discountCoupon.DiscountRate));
-                    saved += discountAmount;
-
-                    foreach (var item in itemsCopy)
-                    {
-                        if (discountCoupon.ApplicableProductIds == null || discountCoupon.ApplicableProductIds.Count == 0 || discountCoupon.ApplicableProductIds.Contains(item.ProductId))
-                        {
-                            item.Price *= discountCoupon.DiscountRate;
-                        }
-                    }
-                }
-
-                // Step6: 处理Cash券（满减、代金券）
-                foreach (var coupon in distinctCoupons.Where(c => c.Type == CouponType.Cash))
-                {
-                    var amount = itemsCopy
-                        .Where(i => coupon.ApplicableProductIds == null || coupon.ApplicableProductIds.Count == 0 || coupon.ApplicableProductIds.Contains(i.ProductId))
-                        .Sum(i => i.Price * i.Quantity);
-                    if (amount >= coupon.Threshold)
-                    {
-                        var reduction = Math.Min(coupon.Amount, amount);
-                        saved += reduction;
-                    }
-                }
-
-                payable = Math.Max(order.TotalAmount - saved, 0);
-
-                // Step7: 更新最优方案
-                if (payable < bestResult.PayableAmount ||
-                    (payable == bestResult.PayableAmount && distinctCoupons.Count > bestResult.AppliedCoupons.Count))
+                // 记录最优
+                if (IsBetter(payable, bestResult, distinctCoupons))
                 {
                     bestResult.PayableAmount = payable;
                     bestResult.SavedAmount = saved;
@@ -291,8 +230,123 @@ namespace Noob.Algorithms
             }
             return bestResult;
         }
-    }
 
+        /// <summary>
+        /// 组合生成所有券应用场景（叠加券+每个不可叠加券，或单纯叠加券）。
+        /// </summary>
+        private static List<List<Coupon>> BuildAllCouponCombinations(
+            List<Coupon> stackableCoupons, List<Coupon> nonStackableCoupons)
+        {
+            var combinations = new List<List<Coupon>>();
+            foreach (var single in nonStackableCoupons)
+                combinations.Add(new List<Coupon> { single }.Concat(stackableCoupons).Distinct().ToList());
+            if (stackableCoupons.Any())
+                combinations.Add(stackableCoupons);
+            return combinations;
+        }
+
+        /// <summary>
+        /// 判断方案是否更优。
+        /// </summary>
+        private static bool IsBetter(decimal payable, CouponApplyResult currentBest, List<Coupon> coupons)
+        {
+            return payable < currentBest.PayableAmount ||
+                   (payable == currentBest.PayableAmount &&
+                    coupons.Count > (currentBest.AppliedCoupons?.Count ?? 0));
+        }
+        /// <summary>
+        /// 深复制订单项
+        /// </summary>
+        private static OrderItem CloneOrderItem(OrderItem item)
+        {
+            return new OrderItem
+            {
+                ProductId = item.ProductId,
+                Price = item.Price,
+                Quantity = item.Quantity
+            };
+        }
+
+        /// <summary>
+        /// 处理Gift兑换券
+        /// </summary>
+        private static void ApplyGiftCoupons(IEnumerable<Coupon> coupons, List<OrderItem> items, ref decimal saved)
+        {
+            foreach (var coupon in coupons.Where(c => c.Type == CouponType.Gift))
+            {
+                foreach (var item in items)
+                {
+                    if (coupon.ApplicableProductIds != null &&
+                        coupon.ApplicableProductIds.Contains(item.ProductId) &&
+                        item.Quantity > 0)
+                    {
+                        int redeemQty = 1;
+                        decimal redeemValue = Math.Min(item.Quantity, redeemQty) * item.Price;
+                        saved += redeemValue;
+                        item.Quantity -= redeemQty;
+                        break;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 处理特价券
+        /// </summary>
+        private static void ApplySpecialPriceCoupons(IEnumerable<Coupon> coupons, List<OrderItem> items, ref decimal saved)
+        {
+            foreach (var coupon in coupons.Where(c => c.Type == CouponType.SpecialPrice))
+            {
+                var item = items.FirstOrDefault(i => coupon.ApplicableProductIds?.Contains(i.ProductId) ?? false);
+                if (item != null && coupon.SpecialPrice.HasValue && item.Price > coupon.SpecialPrice.Value)
+                {
+                    saved += (item.Price - coupon.SpecialPrice.Value) * item.Quantity;
+                    item.Price = coupon.SpecialPrice.Value;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 处理折扣券（同一商品单张生效，优先取最大折扣）
+        /// </summary>
+        private static void ApplyDiscountCoupons(IEnumerable<Coupon> coupons, List<OrderItem> items, ref decimal saved)
+        {
+            var discountCoupon = coupons.Where(c => c.Type == CouponType.Discount)
+                                       .OrderBy(c => c.DiscountRate)
+                                       .FirstOrDefault();
+            if (discountCoupon != null && discountCoupon.DiscountRate > 0 && discountCoupon.DiscountRate < 1)
+            {
+                foreach (var item in items)
+                {
+                    if (discountCoupon.ApplicableProductIds == null ||
+                        discountCoupon.ApplicableProductIds.Count == 0 ||
+                        discountCoupon.ApplicableProductIds.Contains(item.ProductId))
+                    {
+                        decimal discountAmount = item.Price * item.Quantity * (1 - discountCoupon.DiscountRate);
+                        saved += discountAmount;
+                        item.Price *= discountCoupon.DiscountRate;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 处理现金券（满减/代金券）
+        /// </summary>
+        private static void ApplyCashCoupons(IEnumerable<Coupon> coupons, List<OrderItem> items, ref decimal saved)
+        {
+            foreach (var coupon in coupons.Where(c => c.Type == CouponType.Cash))
+            {
+                decimal amount = items
+                    .Where(item => coupon.ApplicableProductIds == null || coupon.ApplicableProductIds.Count == 0 || coupon.ApplicableProductIds.Contains(item.ProductId))
+                    .Sum(item => item.Price * item.Quantity);
+                if (amount >= coupon.Threshold)
+                {
+                    saved += Math.Min(coupon.Amount, amount);
+                }
+            }
+        }
+    }
     /// <summary>
     /// Defines test class CouponTests.
     /// </summary>
