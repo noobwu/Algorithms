@@ -179,6 +179,197 @@ namespace Noob.Algorithms
     /// </summary>
     public class CouponOptimizer
     {
+        /// <summary>
+        /// 券数<=此值用DP，否则用贪心
+        /// </summary>
+        private const int DPThreshold = 20;
+
+        /// <summary>
+        /// 自动选择最大优惠券组合（DP+贪心混合策略）
+        /// </summary>
+        public static CouponApplyResult SelectBestCouponsSmart(Order order, List<Coupon> availableCoupons)
+        {
+            if (order == null) throw new ArgumentNullException(nameof(order));
+            if (availableCoupons == null) throw new ArgumentNullException(nameof(availableCoupons));
+
+            // Step 1：先应用所有特价/兑换券
+            var itemsCopy = order.Items.Select(CloneOrderItem).ToList();
+            var appliedCoupons = new List<Coupon>();
+            decimal preSaved = 0;
+
+            foreach (var coupon in availableCoupons.Where(c => c.Type == CouponType.SpecialPrice || c.Type == CouponType.Gift).ToList())
+            {
+                ApplySingleCoupon(coupon, itemsCopy, ref preSaved);
+                appliedCoupons.Add(coupon);
+            }
+
+            // Step 2：Cash/Discount券池
+            var coreCoupons = availableCoupons
+                .Where(c => (c.Type == CouponType.Cash || c.Type == CouponType.Discount) && c.IsStackable)
+                .ToList();
+
+            CouponApplyResult coreResult;
+
+            if (coreCoupons.Count <= DPThreshold) 
+            {
+                coreResult = SelectBestCouponsDPInternal(itemsCopy, coreCoupons);
+            }
+            else
+            {
+                coreResult = SelectBestCouponsGreedyInternal(itemsCopy, coreCoupons);
+            }
+
+            // 合并最终结果
+            appliedCoupons.AddRange(coreResult.AppliedCoupons);
+            return new CouponApplyResult
+            {
+                PayableAmount = coreResult.PayableAmount,
+                SavedAmount = preSaved + coreResult.SavedAmount,
+                AppliedCoupons = appliedCoupons
+            };
+        }
+
+        /// <summary>
+        /// DP求解Cash/Discount券最优组合（券数较少时,防止内存溢出）
+        /// </summary>
+        private static CouponApplyResult SelectBestCouponsDPInternal(List<OrderItem> itemsCopy, List<Coupon> coupons)
+        {
+            decimal currentAmount = itemsCopy.Sum(i => i.Price * i.Quantity);
+            int n = coupons.Count;
+            int maxState = 1 << n;
+
+            var minPay = new decimal[maxState];
+            for (int i = 0; i < maxState; i++) minPay[i] = decimal.MaxValue;
+            minPay[0] = currentAmount;
+
+            var prevState = new int[maxState];
+            var prevCoupon = new int[maxState];
+            Array.Fill(prevState, -1);
+            Array.Fill(prevCoupon, -1);
+
+            // DP主循环
+            for (int state = 0; state < maxState; state++)
+            {
+                if (minPay[state] == decimal.MaxValue) continue; // 不可达状态，跳过
+                for (int i = 0; i < n; i++)
+                {
+                    if ((state & (1 << i)) != 0) continue; // 已用该券
+                    var coupon = coupons[i];
+                    decimal now = minPay[state];
+                    if (now < coupon.Threshold) continue;
+
+                    decimal after = now;
+                    if (coupon.Type == CouponType.Cash)
+                        after = Math.Max(0, now - coupon.Amount);
+                    else if (coupon.Type == CouponType.Discount && coupon.DiscountRate > 0 && coupon.DiscountRate < 1)
+                        after = now * coupon.DiscountRate;
+
+                    int newState = state | (1 << i);
+                    if (after < minPay[newState])
+                    {
+                        minPay[newState] = after;
+                        prevState[newState] = state;
+                        prevCoupon[newState] = i;
+                    }
+                }
+            }
+
+            // 回溯
+            decimal minFinal = currentAmount;
+            int bestS = 0;
+            for (int s = 0; s < maxState; s++)
+            {
+                if (minPay[s] < minFinal)
+                {
+                    minFinal = minPay[s];
+                    bestS = s;
+                }
+            }
+            var bestList = new List<Coupon>();
+            int state2 = bestS;
+            HashSet<int> guard = new HashSet<int>(); // 防死循环回溯
+            while (state2 != 0 && prevState[state2] != -1)
+            {
+                if (!guard.Add(state2)) break; // 若状态重复，断链防止死循环
+                int cidx = prevCoupon[state2];
+                bestList.Add(coupons[cidx]);
+                state2 = prevState[state2];
+            }
+            bestList.Reverse();
+
+            decimal totalSaved = currentAmount - minFinal;
+            decimal payable = minFinal;
+            return new CouponApplyResult
+            {
+                PayableAmount = payable,
+                SavedAmount = totalSaved,
+                AppliedCoupons = bestList
+            };
+        }
+
+
+        /// <summary>
+        /// 贪心法求解Cash/Discount券最优组合（券数较多时）
+        /// </summary>
+        private static CouponApplyResult SelectBestCouponsGreedyInternal(List<OrderItem> itemsCopy, List<Coupon> coupons)
+        {
+            var used = new HashSet<int>();
+            var applied = new List<Coupon>();
+            decimal saved = 0;
+            decimal current = itemsCopy.Sum(i => i.Price * i.Quantity);
+
+            int lastUsedCount = -1; // 死循环防护，监控used是否有增加
+
+            while (used.Count != lastUsedCount)
+            {
+                lastUsedCount = used.Count;
+                Coupon best = null;
+                int bestIdx = -1;
+                decimal maxSave = 0;
+
+                for (int i = 0; i < coupons.Count; i++)
+                {
+                    if (used.Contains(i)) continue;
+                    var coupon = coupons[i];
+                    if (current < coupon.Threshold) continue;
+
+                    decimal after = current;
+                    if (coupon.Type == CouponType.Cash)
+                        after = Math.Max(0, current - coupon.Amount);
+                    else if (coupon.Type == CouponType.Discount && coupon.DiscountRate > 0 && coupon.DiscountRate < 1)
+                        after = current * coupon.DiscountRate;
+                    decimal save = current - after;
+                    if (save > maxSave)
+                    {
+                        maxSave = save;
+                        best = coupon;
+                        bestIdx = i;
+                    }
+                }
+                if (best != null && maxSave > 0)
+                {
+                    applied.Add(best);
+                    used.Add(bestIdx);
+                    if (best.Type == CouponType.Cash)
+                        current = Math.Max(0, current - best.Amount);
+                    else if (best.Type == CouponType.Discount && best.DiscountRate > 0 && best.DiscountRate < 1)
+                        current = current * best.DiscountRate;
+                    saved += maxSave;
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            return new CouponApplyResult
+            {
+                PayableAmount = current,
+                SavedAmount = saved,
+                AppliedCoupons = applied
+            };
+        }
+
 
         /// <summary>
         /// 贪心法自动选择最大优惠券组合（适合券数量较多、业务可容忍次优解时）。
@@ -695,6 +886,159 @@ namespace Noob.Algorithms
             Assert.AreEqual(150, result.PayableAmount);
             Assert.AreEqual(50, result.SavedAmount);
             Assert.IsTrue(result.AppliedCoupons.Any(c => c.Amount == 50));
+        }
+
+        /// <summary>
+        /// Defines the test method DpCashAndDiscountGlobalOptimal.
+        /// 两张券，走DP，找全局最优
+        /// </summary>
+        [Test]
+        public void DpCashAndDiscountGlobalOptimal()
+        {
+            // 两张券，走DP，找全局最优
+            var order = new Order
+            {
+                Items = new List<OrderItem>
+                {
+                    new OrderItem { ProductId = 1, Price = 100, Quantity = 1 },
+                    new OrderItem { ProductId = 2, Price = 100, Quantity = 1 }
+                }
+            };
+            var coupons = new List<Coupon>
+            {
+                new Coupon { CouponId = 1, Type = CouponType.Cash, Threshold = 150, Amount = 40, IsStackable = true },
+                new Coupon { CouponId = 2, Type = CouponType.Discount, Threshold = 100, DiscountRate = 0.8m, IsStackable = true }
+            };
+            var result = CouponOptimizer.SelectBestCouponsSmart(order, coupons);
+            Assert.AreEqual(120, result.PayableAmount); // 应为(200*0.8)-40=120
+            Assert.That(result.AppliedCoupons.Count, Is.EqualTo(2));
+            Assert.That(result.AppliedCoupons.Any(c => c.Type == CouponType.Cash));
+            Assert.That(result.AppliedCoupons.Any(c => c.Type == CouponType.Discount));
+        }
+
+        /// <summary>
+        /// Defines the test method DpSpecialPriceFirstThenCash.
+        /// 有特价券，先应用，然后DP现金券
+        /// </summary>
+        [Test]
+        public void DpSpecialPriceFirstThenCash()
+        {
+            // 有特价券，先应用，然后DP现金券
+            var order = new Order
+            {
+                Items = new List<OrderItem>
+                {
+                    new OrderItem { ProductId = 1, Price = 100, Quantity = 1 },
+                    new OrderItem { ProductId = 2, Price = 80, Quantity = 1 }
+                }
+            };
+            var coupons = new List<Coupon>
+            {
+                new Coupon { CouponId = 3, Type = CouponType.SpecialPrice, ApplicableProductIds = new List<int> { 2 }, SpecialPrice = 40, IsStackable = false },
+                new Coupon { CouponId = 4, Type = CouponType.Cash, Threshold = 100, Amount = 30, IsStackable = true }
+            };
+            var result = CouponOptimizer.SelectBestCouponsSmart(order, coupons);
+            Assert.AreEqual(110, result.PayableAmount); // (100+40)-30=110
+            Assert.That(result.AppliedCoupons.Any(c => c.Type == CouponType.SpecialPrice));
+            Assert.That(result.AppliedCoupons.Any(c => c.Type == CouponType.Cash));
+        }
+
+        /// <summary>
+        /// Defines the test method DpGiftCouponAlwaysAppliedFirst.
+        /// </summary>
+        [Test]
+        public void DpGiftCouponAlwaysAppliedFirst()
+        {
+            // 兑换券先抵扣商品，后续再选现金券
+            var order = new Order
+            {
+                Items = new List<OrderItem>
+            {
+                new OrderItem { ProductId = 1, Price = 50, Quantity = 1 },
+                new OrderItem { ProductId = 2, Price = 120, Quantity = 1 }
+            }
+            };
+            var coupons = new List<Coupon>
+            {
+                new Coupon { CouponId = 5, Type = CouponType.Gift, ApplicableProductIds = new List<int> { 2 }, IsStackable = false },
+                new Coupon { CouponId = 6, Type = CouponType.Cash, Threshold = 50, Amount = 20, IsStackable = true }
+            };
+            var result = CouponOptimizer.SelectBestCouponsSmart(order, coupons);
+            Assert.AreEqual(30, result.PayableAmount); // 120抵扣后剩50-20=30
+            Assert.That(result.AppliedCoupons.Any(c => c.Type == CouponType.Gift));
+            Assert.That(result.AppliedCoupons.Any(c => c.Type == CouponType.Cash));
+        }
+
+        /// <summary>
+        /// Defines the test method GreedyManyCashCoupons.
+        /// 超过20张券（假设DP阈值为20），自动切换贪心法
+        /// </summary>
+        [Test]
+        public void GreedyManyCashCoupons()
+        {
+            // 超过20张券（假设DP阈值为20），自动切换贪心法
+            var order = new Order
+            {
+                Items = new List<OrderItem> { new OrderItem { ProductId = 1, Price = 500, Quantity = 1 } }
+            };
+            var coupons = new List<Coupon>();
+            for (int i = 0; i < 25; i++)
+            {
+                coupons.Add(new Coupon
+                {
+                    CouponId = 1000 + i,
+                    Type = CouponType.Cash,
+                    Threshold = 100 + i * 10,
+                    Amount = 10 + i,
+                    IsStackable = true
+                });
+            }
+            var result = CouponOptimizer.SelectBestCouponsSmart(order, coupons);
+
+            Assert.Less(result.PayableAmount, 500); // 必须节省
+            Assert.That(result.AppliedCoupons.Count, Is.GreaterThan(0));
+        }
+
+
+        /// <summary>
+        /// Defines the test method GreedyDiscountAndCashCombo.
+        /// 大量券，自动走贪心
+        /// </summary>
+        [Test]
+        public void GreedyDiscountAndCashCombo()
+        {
+            // 大量券，自动走贪心
+            var order = new Order
+            {
+                Items = new List<OrderItem> { new OrderItem { ProductId = 1, Price = 400, Quantity = 1 } }
+            };
+            var coupons = new List<Coupon>();
+            for (int i = 0; i < 15; i++)
+            {
+                coupons.Add(new Coupon
+                {
+                    CouponId = 2000 + i,
+                    Type = CouponType.Cash,
+                    Threshold = 100,
+                    Amount = 5 + i,
+                    IsStackable = true
+                });
+            }
+            for (int i = 0; i < 10; i++)
+            {
+                coupons.Add(new Coupon
+                {
+                    CouponId = 3000 + i,
+                    Type = CouponType.Discount,
+                    Threshold = 50,
+                    DiscountRate = 1.0m - 0.02m * (i + 1), // 0.98, 0.96, ..., 0.8
+                    IsStackable = true
+                });
+            }
+            var result = CouponOptimizer.SelectBestCouponsSmart(order, coupons);
+
+            Assert.Less(result.PayableAmount, 400);
+            Assert.That(result.AppliedCoupons.Count, Is.GreaterThan(1));
         }
     }
 }
