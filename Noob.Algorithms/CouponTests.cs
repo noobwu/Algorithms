@@ -188,17 +188,23 @@ namespace Noob.Algorithms
             if (order == null) throw new ArgumentNullException(nameof(order));
             if (availableCoupons == null) throw new ArgumentNullException(nameof(availableCoupons));
 
-            // 副本防污染
             var itemsCopy = order.Items.Select(CloneOrderItem).ToList();
             var validCoupons = availableCoupons.Where(c => c.IsValidFor(order)).ToList();
             var appliedCoupons = new List<Coupon>();
             decimal saved = 0;
 
-            // 1. 处理所有不可叠加券：只选最大节省券
+            // Step 1: 批量应用Gift和SpecialPrice券（类型优先处理）
+            foreach (var coupon in validCoupons.Where(c => c.Type == CouponType.SpecialPrice || c.Type == CouponType.Gift).ToList())
+            {
+                ApplySingleCoupon(coupon, itemsCopy, ref saved);
+                appliedCoupons.Add(coupon);
+                validCoupons.Remove(coupon);
+            }
+
+            // Step 2: 只选最优一张不可叠加券（非Gift/SpecialPrice）
             var nonStackable = validCoupons.Where(c => !c.IsStackable).ToList();
             Coupon bestNonStackable = null;
             decimal bestNonStackableSave = 0;
-
             foreach (var coupon in nonStackable)
             {
                 decimal tempSaved = 0;
@@ -214,16 +220,17 @@ namespace Noob.Algorithms
             {
                 ApplySingleCoupon(bestNonStackable, itemsCopy, ref saved);
                 appliedCoupons.Add(bestNonStackable);
+                validCoupons.Remove(bestNonStackable);
             }
 
-            // 2. 贪心选择可叠加券，每次选最能省钱的，直到没法再省
-            var stackable = validCoupons.Where(c => c.IsStackable && (bestNonStackable == null || c.CouponId != bestNonStackable.CouponId)).ToList();
-            var remaining = stackable.ToList();
-            while (remaining.Any())
+            // Step 3: 动态边际贡献贪心叠加券
+            var stackable = validCoupons.Where(c => c.IsStackable).ToList();
+            var used = new HashSet<int>();
+            while (stackable.Any(c => !used.Contains(c.CouponId)))
             {
                 Coupon best = null;
                 decimal maxSave = 0;
-                foreach (var coupon in remaining)
+                foreach (var coupon in stackable.Where(c => !used.Contains(c.CouponId)))
                 {
                     decimal tempSaved = 0;
                     var testItems = itemsCopy.Select(CloneOrderItem).ToList();
@@ -238,7 +245,9 @@ namespace Noob.Algorithms
                 {
                     ApplySingleCoupon(best, itemsCopy, ref saved);
                     appliedCoupons.Add(best);
-                    remaining.Remove(best);
+                    used.Add(best.CouponId);
+
+                    // 如有券冲突互斥表，可此处过滤stackable池
                 }
                 else
                 {
