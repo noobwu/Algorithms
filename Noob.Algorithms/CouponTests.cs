@@ -236,7 +236,11 @@ namespace Noob.Algorithms
         {
             decimal currentAmount = itemsCopy.Sum(i => i.Price * i.Quantity);
             int n = coupons.Count;
-            int maxState = 1 << n;
+            /*
+            风险：
+            - 当n = 20时，decimal[maxState] 数组占用内存：2 ^ 20 * 16 bytes ≈ 16MB
+            */
+            int maxState = 1 << n;//券数=20时消耗16MB内存，n=25时达512MB
 
             var minPay = new decimal[maxState];
             for (int i = 0; i < maxState; i++) minPay[i] = decimal.MaxValue;
@@ -253,6 +257,10 @@ namespace Noob.Algorithms
                 if (minPay[state] == decimal.MaxValue) continue; // 不可达状态，跳过
                 for (int i = 0; i < n; i++)
                 {
+                    /*
+                     * 1 << i 表示一个只在第i位为1，其余位为0的二进制数。
+                     * state & (1 << i) 结果为非0，只有在state的第i位本来就是1时才会成立。
+                     */
                     if ((state & (1 << i)) != 0) continue; // 已用该券
                     var coupon = coupons[i];
                     decimal now = minPay[state];
@@ -264,6 +272,10 @@ namespace Noob.Algorithms
                     else if (coupon.Type == CouponType.Discount && coupon.DiscountRate > 0 && coupon.DiscountRate < 1)
                         after = now * coupon.DiscountRate;
 
+                    /*
+                     * 1 << i 把第 i 位设为 1，其余为 0。
+                     * state | (1 << i) 表示“在当前状态 state 的基础上，再把第 i 个选项标记为已用”，生成新状态。
+                     */
                     int newState = state | (1 << i);
                     if (after < minPay[newState])
                     {
