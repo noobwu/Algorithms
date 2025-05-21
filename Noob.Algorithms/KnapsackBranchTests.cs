@@ -196,7 +196,7 @@ namespace Noob.Algorithms
             int[] weights = { 2, 2, 6, 5, 4 };//每个物品的重量
             int[] values = { 6, 3, 5, 4, 6 };//每个物品的价值
             int capacity = 10;//背包总容量
-            int expected = 15;
+            int expected = 15;//最大化价值(6+3+6=15)
             var result = KnapsackBranch.Calculate(weights, values, capacity);
             Assert.AreEqual(expected, result.MaxValue);
             // 可断言result.Selected方案等
