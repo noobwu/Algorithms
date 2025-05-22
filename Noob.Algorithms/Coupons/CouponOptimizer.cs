@@ -17,12 +17,12 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Noob.Algorithms
+namespace Noob.Algorithms.Coupons
 {
     /// <summary>
     /// 优惠券自动优化器：计算订单最优优惠组合。
     /// </summary>
-    public class CouponOptimizer
+    public partial class CouponOptimizer
     {
         /// <summary>
         /// 券数<=此值用DP，否则用贪心
@@ -35,8 +35,8 @@ namespace Noob.Algorithms
         /// <param name="order">The order.</param>
         /// <param name="availableCoupons">The available coupons.</param>
         /// <returns>CouponApplyResult.</returns>
-        /// <exception cref="System.ArgumentNullException">order</exception>
-        /// <exception cref="System.ArgumentNullException">availableCoupons</exception>
+        /// <exception cref="ArgumentNullException">order</exception>
+        /// <exception cref="ArgumentNullException">availableCoupons</exception>
         public static CouponApplyResult SelectBestCouponsSmart(Order order, List<Coupon> availableCoupons)
         {
             if (order == null) throw new ArgumentNullException(nameof(order));
@@ -114,7 +114,7 @@ namespace Noob.Algorithms
                      * 1 << i 表示一个只在第i位为1，其余位为0的二进制数。
                      * state & (1 << i) 结果为非0，只有在state的第i位本来就是1时才会成立。
                      */
-                    if ((state & (1 << i)) != 0) continue; // 已用该券
+                    if ((state & 1 << i) != 0) continue; // 已用该券
                     var coupon = coupons[i];
                     decimal now = minPay[state];
                     if (now < coupon.Threshold) continue;
@@ -129,7 +129,7 @@ namespace Noob.Algorithms
                      * 1 << i 把第 i 位设为 1，其余为 0。
                      * state | (1 << i) 表示“在当前状态 state 的基础上，再把第 i 个选项标记为已用”，生成新状态。
                      */
-                    int newState = state | (1 << i);
+                    int newState = state | 1 << i;
                     if (after < minPay[newState])
                     {
                         minPay[newState] = after;
@@ -245,8 +245,8 @@ namespace Noob.Algorithms
         /// <param name="order">The order.</param>
         /// <param name="availableCoupons">The available coupons.</param>
         /// <returns>CouponApplyResult.</returns>
-        /// <exception cref="System.ArgumentNullException">order</exception>
-        /// <exception cref="System.ArgumentNullException">availableCoupons</exception>
+        /// <exception cref="ArgumentNullException">order</exception>
+        /// <exception cref="ArgumentNullException">availableCoupons</exception>
         public static CouponApplyResult SelectBestCouponsGreedy(Order order, List<Coupon> availableCoupons)
         {
             if (order == null) throw new ArgumentNullException(nameof(order));
@@ -358,8 +358,8 @@ namespace Noob.Algorithms
         /// <param name="order">The order.</param>
         /// <param name="availableCoupons">The available coupons.</param>
         /// <returns>CouponApplyResult.</returns>
-        /// <exception cref="System.ArgumentNullException">order</exception>
-        /// <exception cref="System.ArgumentNullException">availableCoupons</exception>
+        /// <exception cref="ArgumentNullException">order</exception>
+        /// <exception cref="ArgumentNullException">availableCoupons</exception>
         public static CouponApplyResult SelectBestCoupons(Order order, List<Coupon> availableCoupons)
         {
             if (order == null) throw new ArgumentNullException(nameof(order));
@@ -428,8 +428,8 @@ namespace Noob.Algorithms
         private static bool IsBetter(decimal payable, CouponApplyResult currentBest, List<Coupon> coupons)
         {
             return payable < currentBest.PayableAmount ||
-                   (payable == currentBest.PayableAmount &&
-                    coupons.Count > (currentBest.AppliedCoupons?.Count ?? 0));
+                   payable == currentBest.PayableAmount &&
+                    coupons.Count > (currentBest.AppliedCoupons?.Count ?? 0);
         }
         /// <summary>
         /// 深复制订单项

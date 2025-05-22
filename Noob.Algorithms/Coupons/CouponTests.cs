@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Noob.Algorithms
+namespace Noob.Algorithms.Coupons
 {
     /// <summary>
     /// 优惠券类型
@@ -43,6 +43,19 @@ namespace Noob.Algorithms
         /// </summary>
         /// <value>The coupon identifier.</value>
         public int CouponId { get; set; }
+
+        /// <summary>
+        /// 优惠券码，可能是字符串
+        /// </summary>
+        /// <value>The coupon code.</value>
+        public string CouponCode { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 优惠券名称
+        /// </summary>
+        /// <value>The name of the coupon.</value>
+        public string CouponName { get; set; } = string.Empty;
+
         /// <summary>
         /// Gets or sets the type.
         /// </summary>
@@ -179,7 +192,7 @@ namespace Noob.Algorithms
     /// Defines test class CouponTests.
     /// </summary>
     [TestFixture]
-    public class CouponTests {
+    public partial class CouponTests {
 
         /// <summary>
         /// Defines the test method SimpleCashCoupon.
@@ -288,10 +301,10 @@ namespace Noob.Algorithms
         }
 
         /// <summary>
-        /// Defines the test method Greedy_SimpleCashCoupon.
+        /// Defines the test method Greedy_MultiCashCoupons.
         /// </summary>
         [Test]
-        public void Greedy_SimpleCashCoupon()
+        public void Greedy_MultiCashCoupons()
         {
             var order = new Order
             {
@@ -309,6 +322,33 @@ namespace Noob.Algorithms
 
             Assert.AreEqual(90, result.PayableAmount);
             Assert.AreEqual(30, result.SavedAmount);
+            Assert.That(result.AppliedCoupons.Count, Is.EqualTo(1));
+            Assert.That(result.AppliedCoupons.First().Type, Is.EqualTo(CouponType.Cash));
+        }
+
+        /// <summary>
+        /// Defines the test method Greedy_SimpleCashCoupon.
+        /// </summary>
+        [Test]
+        public void Greedy_SimpleCashCoupon()
+        {
+            var order = new Order
+            {
+                Items = new List<OrderItem>
+                {
+                    new OrderItem { ProductId = 1, Price = 350, Quantity = 1 }
+                }
+            };
+            var coupons = new List<Coupon>
+            {
+                new Coupon { CouponId = 1, Type = CouponType.Cash, Threshold = 300, Amount = 50, IsStackable = true },
+                new Coupon { CouponId = 2, Type = CouponType.Cash, Threshold = 200, Amount = 30, IsStackable = true }
+            };
+
+            var result = CouponOptimizer.SelectBestCouponsGreedy(order, coupons);
+
+            Assert.AreEqual(270, result.PayableAmount);
+            Assert.AreEqual(80, result.SavedAmount);
             Assert.That(result.AppliedCoupons.Count, Is.EqualTo(1));
             Assert.That(result.AppliedCoupons.First().Type, Is.EqualTo(CouponType.Cash));
         }
