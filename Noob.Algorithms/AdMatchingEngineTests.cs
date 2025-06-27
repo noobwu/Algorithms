@@ -36,32 +36,32 @@ namespace Noob.Algorithms
         /// <value>The advertiser identifier.</value>
         public int AdvertiserId { get; set; }
         /// <summary>
-        /// Gets or sets the keyword.
+        /// 关键字
         /// </summary>
         /// <value>The keyword.</value>
         public string Keyword { get; set; }
         /// <summary>
-        /// Gets or sets the bid price.
+        /// 出价
         /// </summary>
         /// <value>The bid price.</value>
         public decimal BidPrice { get; set; }
         /// <summary>
-        /// Gets or sets the estimated CTR.
+        /// 预估点击率
         /// </summary>
         /// <value>The estimated CTR.</value>
         public decimal EstimatedCtr { get; set; }
         /// <summary>
-        /// Gets or sets the budget.
+        /// 预算
         /// </summary>
         /// <value>The budget.</value>
         public decimal Budget { get; set; }
         /// <summary>
-        /// Gets or sets the spent.
+        /// 已花费的金额
         /// </summary>
         /// <value>The spent.</value>
         public decimal Spent { get; set; }
         /// <summary>
-        /// Gets or sets the quality score.
+        /// 综合得分
         /// </summary>
         /// <value>The quality score.</value>
         public decimal QualityScore { get; set; }
@@ -73,13 +73,13 @@ namespace Noob.Algorithms
     public class SearchQuery
     {
         /// <summary>
-        /// Gets or sets the keyword.
+        /// 关键字
         /// </summary>
         /// <value>The keyword.</value>
         public string Keyword { get; set; }
 
         /// <summary>
-        /// Gets or sets the user identifier.
+        /// 用户Id
         /// </summary>
         /// <value>The user identifier.</value>
         public int UserId { get; set; }
@@ -164,11 +164,11 @@ namespace Noob.Algorithms
         {
             var engine = new AdMatchingEngine();
             var bids = new List<AdBid>
-        {
-            new AdBid { AdId = 1, AdvertiserId = 1, Keyword = "shoes", BidPrice = 5, EstimatedCtr = 0.1m, Budget = 100, Spent = 10 },
-            new AdBid { AdId = 2, AdvertiserId = 2, Keyword = "shoes", BidPrice = 4, EstimatedCtr = 0.2m, Budget = 50, Spent = 45 },
-            new AdBid { AdId = 3, AdvertiserId = 3, Keyword = "shoes", BidPrice = 6, EstimatedCtr = 0.05m, Budget = 20, Spent = 0 },
-        };
+            {
+                new AdBid { AdId = 1, AdvertiserId = 1, Keyword = "shoes", BidPrice = 5, EstimatedCtr = 0.1m, Budget = 100, Spent = 10 },
+                new AdBid { AdId = 2, AdvertiserId = 2, Keyword = "shoes", BidPrice = 4, EstimatedCtr = 0.2m, Budget = 50, Spent = 45 },
+                new AdBid { AdId = 3, AdvertiserId = 3, Keyword = "shoes", BidPrice = 6, EstimatedCtr = 0.05m, Budget = 20, Spent = 0 },
+            };
             var query = new SearchQuery { Keyword = "shoes", UserId = 1001 };
 
             var ads = engine.SelectAds(query, bids, maxAdCount: 2);
