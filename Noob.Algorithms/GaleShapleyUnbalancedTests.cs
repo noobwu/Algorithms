@@ -18,47 +18,69 @@ namespace Noob.Algorithms
         public enum Role { Proposer, Receiver }
 
         /// <summary>
-        /// 支持两侧人数不等的稳定匹配算法
+        /// 不等人数稳定匹配（最大稳定匹配，主导方提案）。
+        /// 主导方与被动方任意数量，允许不可接受（分数≤阈值）直接单身。
         /// </summary>
-        /// <param name="proposers">主动方（如男）</param>
-        /// <param name="receivers">被动方（如女）</param>
-        /// <param name="proposerScores">主动方对被动方的分数矩阵</param>
-        /// <param name="receiverScores">被动方对主动方的分数矩阵</param>
-        /// <returns>返回List<(主动方索引, 被动方索引, 主动满意度, 被动满意度)>，未匹配用-1表示</returns>
+        /// <param name="proposerCount">主导方数量</param>
+        /// <param name="receiverCount">被动方数量</param>
+        /// <param name="proposerScore">主导方对被动方的分数函数</param>
+        /// <param name="receiverScore">被动方对主导方的分数函数</param>
+        /// <param name="acceptanceThreshold">分数大于此值才视为可接受，默认0</param>
+        /// <returns>主导方为主输出，(proposer, receiver, proposerScore, receiverScore)。单身用receiver == -1。</returns>
         public static List<(int proposer, int receiver, double proposerScore, double receiverScore)> StableMatchUnbalanced(
             int proposerCount,
             int receiverCount,
             Func<int, int, double> proposerScore,
-            Func<int, int, double> receiverScore)
+            Func<int, int, double> receiverScore,
+            double acceptanceThreshold = 0.0
+        )
         {
+            if (proposerCount < 0 || receiverCount < 0)
+                throw new ArgumentException("参与者数量不能为负");
+            if (proposerScore == null || receiverScore == null)
+                throw new ArgumentNullException("评分函数不能为空");
+
+            const int Unmatched = -1;
+
+            // Step 1: 构建偏好表，仅纳入可接受对象
             var proposerPrefs = new List<List<int>>(proposerCount);
-            var receiverPrefs = new List<List<int>>(receiverCount);
-            // 构建偏好列表（降序）
             for (int i = 0; i < proposerCount; i++)
             {
-                proposerPrefs.Add(Enumerable.Range(0, receiverCount)
-                    .Where(j => proposerScore(i, j) > 0)   // 只加可接受者
+                var prefs = Enumerable.Range(0, receiverCount)
+                    .Where(j => proposerScore(i, j) > acceptanceThreshold)
                     .OrderByDescending(j => proposerScore(i, j))
-                    .ToList());
+                    .ToList();
+                proposerPrefs.Add(prefs);
             }
 
+            var receiverPrefs = new List<List<int>>(receiverCount);
             for (int j = 0; j < receiverCount; j++)
             {
-                receiverPrefs.Add(Enumerable.Range(0, proposerCount)
-                    .OrderByDescending(i => receiverScore(j, i)).ToList());
+                var prefs = Enumerable.Range(0, proposerCount)
+                    .Where(i => receiverScore(j, i) > acceptanceThreshold)
+                    .OrderByDescending(i => receiverScore(j, i))
+                    .ToList();
+                receiverPrefs.Add(prefs);
             }
 
-            var engaged = Enumerable.Repeat(-1, receiverCount).ToArray(); // -1 表示未匹配
-            var proposerNext = new int[proposerCount]; // 每人下一个追求对象
-            var free = new Queue<int>(Enumerable.Range(0, proposerCount)); // 未配对 proposer
+            // Step 2: 初始化配对状态
+            var engaged = Enumerable.Repeat(Unmatched, receiverCount).ToArray(); // receiver -> proposer
+            var proposerNext = new int[proposerCount]; // 主导方下一个要追求的receiver序号
+            var free = new Queue<int>(Enumerable.Range(0, proposerCount)
+                .Where(p => proposerPrefs[p].Count > 0)); // 只把有偏好对象的 proposer 入队
 
+            // Step 3: GS主循环
             while (free.Count > 0)
             {
                 int p = free.Dequeue();
                 while (proposerNext[p] < proposerPrefs[p].Count)
                 {
                     int r = proposerPrefs[p][proposerNext[p]++];
-                    if (engaged[r] == -1)
+                    // 被动方不接受该 proposer 也视为失败（即使 proposerScore > threshold）
+                    if (!receiverPrefs[r].Contains(p))
+                        continue;
+
+                    if (engaged[r] == Unmatched)
                     {
                         engaged[r] = p;
                         break;
@@ -66,7 +88,7 @@ namespace Noob.Algorithms
                     else
                     {
                         int currentP = engaged[r];
-                        // 若新求婚者更受欢迎
+                        // 被动方更喜欢新 proposer
                         if (receiverPrefs[r].IndexOf(p) < receiverPrefs[r].IndexOf(currentP))
                         {
                             engaged[r] = p;
@@ -75,29 +97,37 @@ namespace Noob.Algorithms
                         }
                     }
                 }
-                // 若p已穷尽所有对象，自动单身
+                // 没有可追求对象或全部被拒，则 p 单身
             }
 
-            // 输出结果（仅输出已配对方）
+            // Step 4: 输出（主导方为主，单身者 receiver == -1，分数Clamp[0,1]）
             var result = new List<(int, int, double, double)>();
             var proposerMatched = new bool[proposerCount];
             for (int r = 0; r < receiverCount; r++)
             {
                 int p = engaged[r];
-                if (p != -1)
+                if (p != Unmatched)
                 {
                     proposerMatched[p] = true;
-                    double sP = proposerScore(p, r);
-                    double sR = receiverScore(r, p);
+                    double sP = Clamp(proposerScore(p, r));
+                    double sR = Clamp(receiverScore(r, p));
                     result.Add((p, r, sP, sR));
                 }
             }
-            // 如需输出单身
             for (int p = 0; p < proposerCount; p++)
+            {
                 if (!proposerMatched[p])
-                    result.Add((p, -1, 0, 0));
+                    result.Add((p, Unmatched, 0, 0));
+            }
             return result;
         }
+
+        /// <summary>
+        /// Clamps the specified v.
+        /// </summary>
+        /// <param name="v">The v.</param>
+        /// <returns>System.Double.</returns>
+        private static double Clamp(double v) => Math.Max(0, Math.Min(1, v));
     }
 
     /// <summary>
