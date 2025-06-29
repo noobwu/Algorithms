@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 namespace Noob.Algorithms
 {
     /// <summary>
-    /// “不完全匹配”/“最大匹配”
+    /// 不等人数稳定匹配（最大稳定匹配，主导方提案）
     /// </summary>
     public class GaleShapleyUnbalancedMatcher
     {
