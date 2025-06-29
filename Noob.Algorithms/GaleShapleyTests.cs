@@ -1,4 +1,17 @@
-﻿using NUnit.Framework;
+﻿// ***********************************************************************
+// Assembly         : Noob.Algorithms
+// Author           : noob
+// Created          : 2025-06-28
+//
+// Last Modified By : noob
+// Last Modified On : 2025-06-29
+// ***********************************************************************
+// <copyright file="GaleShapleyTests.cs" company="Noob.Algorithms">
+//     Copyright (c) . All rights reserved.
+// </copyright>
+// <summary></summary>
+// ***********************************************************************
+using NUnit.Framework;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -31,7 +44,7 @@ namespace Noob.Algorithms
         public double[] Attributes { get; set; }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="User"/> class.
+        /// Initializes a new instance of the <see cref="User" /> class.
         /// </summary>
         /// <param name="id">The identifier.</param>
         /// <param name="coldStart">if set to <c>true</c> [cold start].</param>
@@ -49,13 +62,25 @@ namespace Noob.Algorithms
     /// </summary>
     public class GaleShapleyAdvancedMatcher
     {
+        /// <summary>
+        /// The men
+        /// </summary>
         private readonly List<User> _men;
+        /// <summary>
+        /// The women
+        /// </summary>
         private readonly List<User> _women;
+        /// <summary>
+        /// The attribute weights
+        /// </summary>
         private readonly double[] _attrWeights;
+        /// <summary>
+        /// The rand
+        /// </summary>
         private readonly Random _rand;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="GaleShapleyAdvancedMatcher"/> class.
+        /// Initializes a new instance of the <see cref="GaleShapleyAdvancedMatcher" /> class.
         /// </summary>
         /// <param name="men">The men.</param>
         /// <param name="women">The women.</param>
@@ -102,41 +127,90 @@ namespace Noob.Algorithms
             for (int i = 0; i < a.Length; i++) s += w[i] * a[i] * b[i];
             return s;
         }
+
         /// <summary>
-        /// 稳定婚姻算法(男提案)
+        /// 常量定义
         /// </summary>
-        /// <returns>List&lt;System.ValueTuple&lt;System.Int32, System.Int32, System.Double, System.Double&gt;&gt;.</returns>
+        private const double DefaultColdStartScore = 0.5;
+
+        /// <summary>
+        /// The unmatched
+        /// </summary>
+        private const int Unmatched = -1;
+
+        /// <summary>
+        /// 多属性+冷启动的Gale-Shapley稳定婚姻匹配（男提案版）。
+        /// </summary>
+        /// <returns>配对结果：(男ID, 女ID, 男满意度, 女满意度)</returns>
+        /// <exception cref="System.ArgumentException">男女人数必须一致，当前分别为" + nM + "与" + nW</exception>
         public List<(int Man, int Woman, double ScoreM, double ScoreW)> StableMatch()
         {
             int nM = _men.Count, nW = _women.Count;
+            if (nM != nW) throw new ArgumentException("男女人数必须一致，当前分别为" + nM + "与" + nW);
+
+            // Step 1: 生成满意度矩阵（男视角、女视角）
             var scoreM = BuildScoreMatrix(_men, _women);
             var scoreW = BuildScoreMatrix(_women, _men);
-            var manPrefs = new List<List<int>>();
-            var womanPrefs = new List<List<int>>();
+
+            // Step 2: 预排序生成偏好队列
+            var manPrefs = new List<List<int>>(nM);
+            var womanPrefs = new List<List<int>>(nW);
             for (int i = 0; i < nM; i++)
                 manPrefs.Add(Enumerable.Range(0, nW).OrderByDescending(j => scoreM[i, j]).ToList());
             for (int j = 0; j < nW; j++)
                 womanPrefs.Add(Enumerable.Range(0, nM).OrderByDescending(i => scoreW[j, i]).ToList());
-            var engaged = new int[nW]; Array.Fill(engaged, -1);
-            var next = new int[nM];
-            var free = new Queue<int>(Enumerable.Range(0, nM));
+
+            // Step 3: 初始化配对状态
+            var engaged = Enumerable.Repeat(Unmatched, nW).ToArray(); // 女->男
+            var next = new int[nM]; // 每个男生下一个要追求的女生index
+            var free = new Queue<int>(Enumerable.Range(0, nM)); // 未配对男
+
+            // Step 4: GS主循环
             while (free.Count > 0)
             {
                 int m = free.Dequeue();
+                if (next[m] >= manPrefs[m].Count)
+                    continue; // 防越界（理论上不会发生，防御性编程）
                 int w = manPrefs[m][next[m]++];
-                if (engaged[w] == -1) engaged[w] = m;
-                else if (womanPrefs[w].IndexOf(m) < womanPrefs[w].IndexOf(engaged[w]))
-                { free.Enqueue(engaged[w]); engaged[w] = m; }
-                else free.Enqueue(m);
+                if (engaged[w] == Unmatched)
+                {
+                    engaged[w] = m;
+                }
+                else
+                {
+                    int current = engaged[w];
+                    // 女生偏好新男友胜过当前配偶，则替换
+                    if (womanPrefs[w].IndexOf(m) < womanPrefs[w].IndexOf(current))
+                    {
+                        free.Enqueue(current); // 原配重回单身
+                        engaged[w] = m;
+                    }
+                    else
+                    {
+                        free.Enqueue(m); // 继续追下一个
+                    }
+                }
             }
+
+            // Step 5: 输出结果，分数Clamp到[0,1]
             var result = new List<(int, int, double, double)>();
             for (int w = 0; w < nW; w++)
             {
                 int m = engaged[w];
-                result.Add((m, w, scoreM[m, w], scoreW[w, m]));
+                double sM = ClampScore(scoreM[m, w]);
+                double sW = ClampScore(scoreW[w, m]);
+                result.Add((_men[m].Id, _women[w].Id, sM, sW));
             }
             return result;
         }
+
+        /// <summary>
+        /// 分数强制限制在0-1区间（防止浮点误差/冷启动异常）
+        /// </summary>
+        /// <param name="score">The score.</param>
+        /// <returns>System.Double.</returns>
+        private static double ClampScore(double score) => Math.Max(0, Math.Min(1, score));
+
         /// <summary>
         /// 贪心算法(男优先，忽略女方意愿)
         /// </summary>
@@ -216,6 +290,9 @@ namespace Noob.Algorithms
         }
     }
 
+
+
+
     /// <summary>
     /// Class GaleShapleyAdvancedMatcherTests.
     /// </summary>
@@ -274,4 +351,7 @@ namespace Noob.Algorithms
             Assert.AreEqual(pairs.Select(p => p.Woman).Distinct().Count(), pairs.Count);
         }
     }
+
+
+   
 }
