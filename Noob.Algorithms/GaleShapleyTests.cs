@@ -37,6 +37,7 @@ namespace Noob.Algorithms
         /// </summary>
         /// <value><c>true</c> if this instance is cold start; otherwise, <c>false</c>.</value>
         public bool IsColdStart { get; set; }
+
         /// <summary>
         /// 多属性兴趣/性格
         /// </summary>
@@ -80,6 +81,16 @@ namespace Noob.Algorithms
         private readonly Random _rand;
 
         /// <summary>
+        /// 常量定义
+        /// </summary>
+        private const double DefaultColdStartScore = 0.5;
+
+        /// <summary>
+        /// The unmatched
+        /// </summary>
+        private const int Unmatched = -1;
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="GaleShapleyAdvancedMatcher" /> class.
         /// </summary>
         /// <param name="men">The men.</param>
@@ -92,6 +103,7 @@ namespace Noob.Algorithms
             _attrWeights = attrWeights;
             _rand = seed.HasValue ? new Random(seed.Value) : new Random();
         }
+
         /// <summary>
         /// 生成满意度矩阵，支持多属性+冷启动
         /// </summary>
@@ -107,36 +119,43 @@ namespace Noob.Algorithms
                 for (int j = 0; j < nB; j++)
                 {
                     // 冷启动直接用均值0.5
-                    if (groupA[i].IsColdStart || groupB[j].IsColdStart) score[i, j] = 0.5;
-                    else score[i, j] = DotProduct(groupA[i].Attributes, groupB[j].Attributes, _attrWeights);
+                    if (groupA[i].IsColdStart || groupB[j].IsColdStart)
+                    {
+                        score[i, j] = 0.5;
+                    }
+                    else
+                    {
+                        score[i, j] = DotProduct(groupA[i].Attributes, groupB[j].Attributes, _attrWeights);
+                    }
                 }
             }
             return score;
         }
 
+
         /// <summary>
-        /// Dots the product.
+        /// 计算两个特征向量的加权点积（多属性相似度/满意度分数）。
         /// </summary>
-        /// <param name="a">a.</param>
-        /// <param name="b">The b.</param>
-        /// <param name="w">The w.</param>
-        /// <returns>System.Double.</returns>
-        private static double DotProduct(double[] a, double[] b, double[] w)
+        /// <param name="vectorA">第一个实体的属性特征向量</param>
+        /// <param name="vectorB">第二个实体的属性特征向量</param>
+        /// <param name="attributeWeights">各属性维度的权重</param>
+        /// <returns>加权点积（相似度/满意度）</returns>
+        private static double DotProduct(double[] vectorA, double[] vectorB, double[] attributeWeights)
         {
-            double s = 0;
-            for (int i = 0; i < a.Length; i++) s += w[i] * a[i] * b[i];
-            return s;
+            if (vectorA == null || vectorB == null || attributeWeights == null)
+                throw new ArgumentNullException("输入向量或权重不可为 null");
+            if (vectorA.Length != vectorB.Length || vectorA.Length != attributeWeights.Length)
+                throw new ArgumentException("属性向量与权重数组长度必须一致");
+
+            double score = 0;
+            for (int i = 0; i < vectorA.Length; i++)
+            {
+                // 可扩展：遇到 NaN/null 直接跳过或用冷启动默认值
+                score += attributeWeights[i] * vectorA[i] * vectorB[i];
+            }
+            return score;
         }
 
-        /// <summary>
-        /// 常量定义
-        /// </summary>
-        private const double DefaultColdStartScore = 0.5;
-
-        /// <summary>
-        /// The unmatched
-        /// </summary>
-        private const int Unmatched = -1;
 
         /// <summary>
         /// 多属性+冷启动的Gale-Shapley稳定婚姻匹配（男提案版）。
@@ -248,8 +267,8 @@ namespace Noob.Algorithms
             var matches = new List<(int, int, double, double)>();
             for (int r = 0; r < rounds; r++)
             {
-                var remMen = _men.Where(u => !usedM.Contains(u.Id)).ToList();
-                var remWomen = _women.Where(u => !usedW.Contains(u.Id)).ToList();
+                var remMen = _men.FindAll(u => !usedM.Contains(u.Id));
+                var remWomen = _women.FindAll(u => !usedW.Contains(u.Id));
                 if (remMen.Count == 0 || remWomen.Count == 0) break;
                 var sub = new GaleShapleyAdvancedMatcher(remMen, remWomen, _attrWeights);
                 var pairs = sub.StableMatch();
@@ -283,7 +302,7 @@ namespace Noob.Algorithms
                 bool cold = coldSet.Contains(i);
                 double[] attrs = new double[attrCount];
                 for (int j = 0; j < attrCount; j++)
-                    attrs[j] = cold ? 0.5 : rand.NextDouble();
+                    attrs[j] = cold ? DefaultColdStartScore : rand.NextDouble();
                 users.Add(new User(i, cold, attrs));
             }
             return users;
@@ -309,13 +328,16 @@ namespace Noob.Algorithms
             var weights = new double[] { 0.7, 0.3 };
             var matcher = new GaleShapleyAdvancedMatcher(men, women, weights, 123);
             var pairs = matcher.StableMatch();
-            Assert.AreEqual(10, pairs.Count);
+
+            Assert.That(pairs.Count, Is.EqualTo(10), "应有10对配对");
+
             // 检查无重复匹配
-            Assert.AreEqual(10, pairs.Select(p => p.Man).Distinct().Count());
-            Assert.AreEqual(10, pairs.Select(p => p.Woman).Distinct().Count());
+            Assert.That(pairs.Select(p => p.Man).Distinct().Count(), Is.EqualTo(10), "每个男生唯一配对");
+            Assert.That(pairs.Select(p => p.Woman).Distinct().Count(), Is.EqualTo(10), "每个女生唯一配对");
+
             // 满意度在0~1区间
-            Assert.IsTrue(pairs.All(p => p.ScoreM >= 0 && p.ScoreM <= 1));
-            Assert.IsTrue(pairs.All(p => p.ScoreW >= 0 && p.ScoreW <= 1));
+            Assert.That(pairs.All(p => p.ScoreM >= 0 && p.ScoreM <= 1), Is.True, "男满意度应在0~1区间");
+            Assert.That(pairs.All(p => p.ScoreW >= 0 && p.ScoreW <= 1), Is.True, "女满意度应在0~1区间");
         }
 
         /// <summary>
@@ -329,9 +351,13 @@ namespace Noob.Algorithms
             var weights = new double[] { 0.5, 0.3, 0.2 };
             var matcher = new GaleShapleyAdvancedMatcher(men, women, weights, 7);
             var pairs = matcher.GreedyMatch();
-            Assert.AreEqual(8, pairs.Count);
+
+            Assert.That(pairs.Count, Is.EqualTo(8), "应有8对配对");
+
             // 冷启动满意度应为0.5
-            Assert.IsTrue(pairs.Any(p => Math.Abs(p.ScoreM - 0.5) < 1e-8 || Math.Abs(p.ScoreW - 0.5) < 1e-8));
+            Assert.That(
+                pairs.Any(p => Math.Abs(p.ScoreM - 0.5) < 1e-8 || Math.Abs(p.ScoreW - 0.5) < 1e-8),
+                Is.True, "应有冷启动满意度为0.5的对");
         }
 
         /// <summary>
@@ -345,13 +371,14 @@ namespace Noob.Algorithms
             var weights = new double[] { 0.6, 0.4 };
             var matcher = new GaleShapleyAdvancedMatcher(men, women, weights, 99);
             var pairs = matcher.MultiRoundStableMatch(2);
-            Assert.IsTrue(pairs.Count > 10); // 至少完成一轮
+
+            // 至少完成一轮
+            Assert.That(pairs.Count, Is.GreaterThan(10), "应至少完成一轮配对");
+
             // 检查匹配唯一性
-            Assert.AreEqual(pairs.Select(p => p.Man).Distinct().Count(), pairs.Count);
-            Assert.AreEqual(pairs.Select(p => p.Woman).Distinct().Count(), pairs.Count);
+            Assert.That(pairs.Select(p => p.Man).Distinct().Count(), Is.EqualTo(pairs.Count), "男配对应唯一");
+            Assert.That(pairs.Select(p => p.Woman).Distinct().Count(), Is.EqualTo(pairs.Count), "女配对应唯一");
         }
     }
-
-
-   
+ 
 }
