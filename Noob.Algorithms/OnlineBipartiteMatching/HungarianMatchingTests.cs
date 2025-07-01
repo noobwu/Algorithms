@@ -511,6 +511,55 @@ namespace Noob.Algorithms.OnlineBipartiteMatching
             Assert.That(result.TotalWeight, Is.EqualTo(-2).Within(1e-8));
             Assert.That(new HashSet<int>(result.MatchLeftToRight).Count, Is.EqualTo(2));
         }
+
+        /// <summary>
+        /// 大型方阵（300x300），用于性能与正确性基准测试。
+        /// 保证算法在实际工程下能高效计算且不越界。
+        /// </summary>
+        [Test]
+        public void LargeMatrix_Performance()
+        {
+            int n = 300;
+            double?[,] weights = new double?[n, n];
+            for (int i = 0; i < n; i++)
+                for (int j = 0; j < n; j++)
+                    weights[i, j] = (i == j) ? 10.0 : 1.0;
+            var solver = new HungarianWeightedMatcher();
+            var result = solver.Solve(weights);
+
+            // 匹配应全为主对角线，总权重为300*10=3000
+            Assert.That(result.TotalWeight, Is.EqualTo(n * 10.0).Within(1e-8));
+        }
+
+        /// <summary>
+        /// 稀疏矩阵场景：大部分节点不可分配，校验性能和正确性。
+        /// </summary>
+        [Test]
+        public void SparseMatrix_MostNulls_ShouldWork()
+        {
+            int n = 100;
+            double?[,] weights = new double?[n, n];
+            for (int i = 0; i < n; i++)
+                weights[i, i] = 100; // 只对角线有值，其余为null
+            var solver = new HungarianWeightedMatcher();
+            var result = solver.Solve(weights);
+            Assert.That(result.TotalWeight, Is.EqualTo(100 * n).Within(1e-8));
+        }
+
+        /// <summary>
+        /// 不规则矩阵（左侧多于右侧），部分边不可达。
+        /// </summary>
+        [Test]
+        public void Unbalanced_Sparse_NotAllMatchable()
+        {
+            int n = 50, m = 30;
+            double?[,] weights = new double?[n, m];
+            for (int i = 0; i < n && i < m; i++)
+                weights[i, i] = i + 1;
+            var solver = new HungarianWeightedMatcher();
+            var result = solver.Solve(weights);
+            Assert.That(result.MatchLeftToRight.Count(x => x >= 0), Is.EqualTo(m));
+        }
     }
 
 }
