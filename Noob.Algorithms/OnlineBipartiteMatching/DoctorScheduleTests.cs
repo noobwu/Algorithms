@@ -8,62 +8,6 @@ using System.Threading.Tasks;
 namespace Noob.Algorithms.OnlineBipartiteMatching
 {
     /// <summary>
-    /// Class Doctor.
-    /// </summary>
-    public class Doctor
-    {
-        /// <summary>
-        /// Gets the identifier.
-        /// </summary>
-        /// <value>The identifier.</value>
-        public int Id { get; }
-        /// <summary>
-        /// Gets the name.
-        /// </summary>
-        /// <value>The name.</value>
-        public string Name { get; }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="Doctor"/> class.
-        /// </summary>
-        /// <param name="id">The identifier.</param>
-        /// <param name="name">The name.</param>
-        public Doctor(int id, string name)
-        {
-            Id = id;
-            Name = name;
-        }
-    }
-
-    /// <summary>
-    /// 医生排班信息
-    /// </summary>
-    public class Shift
-    {
-        /// <summary>
-        /// Gets the identifier.
-        /// </summary>
-        /// <value>The identifier.</value>
-        public int Id { get; }
-        /// <summary>
-        /// Gets the name.
-        /// </summary>
-        /// <value>The name.</value>
-        public string Name { get; }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="Shift"/> class.
-        /// </summary>
-        /// <param name="id">The identifier.</param>
-        /// <param name="name">The name.</param>
-        public Shift(int id, string name)
-        {
-            Id = id;
-            Name = name;
-        }
-    }
-
-    /// <summary>
     /// Interface IEligibilityProvider
     /// </summary>
     public interface IEligibilityProvider

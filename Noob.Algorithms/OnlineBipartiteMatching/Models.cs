@@ -126,4 +126,118 @@ namespace Noob.Algorithms.OnlineBipartiteMatching
         }
     }
 
+
+    /// <summary>
+    /// Class Doctor.
+    /// </summary>
+    public class Doctor
+    {
+        /// <summary>
+        /// Gets the identifier.
+        /// </summary>
+        /// <value>The identifier.</value>
+        public int Id { get; set; }
+        /// <summary>
+        /// Gets the name.
+        /// </summary>
+        /// <value>The name.</value>
+        public string Name { get; }
+
+        /// <summary>
+        /// Gets or sets the preference.
+        /// </summary>
+        /// <value>The preference.</value>
+        public PreferenceSim Preference { get; set; }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Doctor"/> class.
+        /// </summary>
+        public Doctor() { }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Doctor"/> class.
+        /// </summary>
+        /// <param name="id">The identifier.</param>
+        /// <param name="name">The name.</param>
+        public Doctor(int id, string name)
+        {
+            Id = id;
+            Name = name;
+        }
+    }
+
+    /// <summary>
+    /// 医生排班信息
+    /// </summary>
+    public class Shift
+    {
+        /// <summary>
+        /// Gets the identifier.
+        /// </summary>
+        /// <value>The identifier.</value>
+        public int Id { get; set; }
+        /// <summary>
+        /// Gets the name.
+        /// </summary>
+        /// <value>The name.</value>
+        public string Name { get; }
+
+        /// <summary>
+        /// Gets or sets the distance km.
+        /// </summary>
+        /// <value>The distance km.</value>
+        public double DistanceKm { get; set; }
+
+        /// <summary>
+        /// Gets or sets the estimated profit.
+        /// </summary>
+        /// <value>The estimated profit.</value>
+        public double EstimatedProfit { get; set; }
+
+        /// <summary>
+        /// Gets or sets the required skill.
+        /// </summary>
+        /// <value>The required skill.</value>
+        public string RequiredSkill { get; set; }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Shift"/> class.
+        /// </summary>
+        public Shift() { }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Shift"/> class.
+        /// </summary>
+        /// <param name="id">The identifier.</param>
+        /// <param name="name">The name.</param>
+        public Shift(int id, string name)
+        {
+            Id = id;
+            Name = name;
+        }
+    }
+
+    /// <summary>
+    /// Class PreferenceSim.
+    /// </summary>
+    public class PreferenceSim
+    {
+        /// <summary>
+        /// The liked shifts
+        /// </summary>
+        private readonly HashSet<int> likedShifts;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="PreferenceSim"/> class.
+        /// </summary>
+        /// <param name="liked">The liked.</param>
+        public PreferenceSim(params int[] liked) => likedShifts = new HashSet<int>(liked);
+
+        /// <summary>
+        /// Gets the score.
+        /// </summary>
+        /// <param name="s">The s.</param>
+        /// <returns>System.Double.</returns>
+        public double GetScore(Shift s) => likedShifts.Contains(s.Id) ? 1.0 : 0.0;
+    }
 }
