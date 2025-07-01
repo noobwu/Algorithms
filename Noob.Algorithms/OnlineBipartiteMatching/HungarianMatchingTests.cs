@@ -13,6 +13,7 @@
 // ***********************************************************************
 using NUnit.Framework;
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -168,137 +169,198 @@ namespace Noob.Algorithms.OnlineBipartiteMatching
     /// </summary>
     public class HungarianWeightedMatcher : IWeightedMatchingSolver
     {
+        /// <summary>数值零容忍误差（浮点比较）</summary>
+        private const double Epsilon = 1e-8;
+
+
         /// <summary>
         /// 求解二分图带权最大匹配
         /// </summary>
         /// <param name="weights">权重矩阵（行=左侧实体，列=右侧实体，null表示不可分配）</param>
         /// <returns>匹配结果</returns>
+        /// <exception cref="System.ArgumentNullException">weights - 权重矩阵不可为null</exception>
+        /// <exception cref="System.ArgumentException">权重矩阵行列不能为空</exception>
         public WeightedMatchingResult Solve(double?[,] weights)
         {
-            int n = weights.GetLength(0);
-            int m = weights.GetLength(1);
-            // 补成方阵
-            int size = Math.Max(n, m);
-            double[,] cost = new double[size, size];
-            for (int i = 0; i < size; i++)
-                for (int j = 0; j < size; j++)
-                    cost[i, j] = (i < n && j < m && weights[i, j].HasValue) ? weights[i, j].Value : double.NegativeInfinity;
+            if (weights == null)
+                throw new ArgumentNullException(nameof(weights), "权重矩阵不可为null");
+            int nRows = weights.GetLength(0), nCols = weights.GetLength(1);
+            if (nRows == 0 || nCols == 0)
+                throw new ArgumentException("权重矩阵行列不能为空");
 
-            int[] match = new int[size]; // match[i]=j：左i匹配右j
-            double total = KuhnMunkres(cost, match);
-
-            return new WeightedMatchingResult
+            // 【新增】全为null直接返回
+            if (IsAllNull(weights))
             {
-                MatchLeftToRight = match.Take(n).Select(idx => idx < m ? idx : -1).ToArray(),
-                TotalWeight = total
-            };
-        }
+                return new WeightedMatchingResult
+                {
+                    MatchLeftToRight = Enumerable.Repeat(-1, nRows).ToArray(),
+                    TotalWeight = 0.0
+                };
+            }
 
+            // 稀疏邻接表，仅保留可分配边
+            var adj = new List<(int Right, double Weight)>[nRows];
+            for (int i = 0; i < nRows; i++)
+            {
+                adj[i] = new List<(int, double)>();
+                for (int j = 0; j < nCols; j++)
+                    if (weights[i, j].HasValue)
+                        adj[i].Add((j, weights[i, j].Value));
+            }
+
+            // 【新增】逐行检测
+            bool[] canAssign = new bool[nRows];
+            for (int i = 0; i < nRows; i++)
+                for (int j = 0; j < nCols; j++)
+                    if (weights[i, j].HasValue) { canAssign[i] = true; break; }
+
+            // KM仍需补全为方阵，所以最大节点数
+            int n = Math.Max(nRows, nCols);
+            double[,] cost = new double[n, n];
+            for (int i = 0; i < n; i++)
+                for (int j = 0; j < n; j++)
+                    cost[i, j] = (i < nRows && j < nCols && weights[i, j].HasValue) ? weights[i, j].Value : double.NegativeInfinity;
+
+            // 对象池：租用大对象，减少GC
+            int[] match = ArrayPool<int>.Shared.Rent(n);
+            double maxWeight = KuhnMunkres(cost, match, n, canAssign);
+
+            // 返回真实匹配，归还对象池
+            var result = new WeightedMatchingResult
+            {
+                MatchLeftToRight = match.Take(nRows).Select(idx => idx < nCols ? idx : -1).ToArray(),
+                TotalWeight = maxWeight
+            };
+            ArrayPool<int>.Shared.Return(match);
+
+            return result;
+        }
+      
         /// <summary>
-        /// 平台工程级 Kuhn-Munkres (KM) 算法实现（最大权重匹配）。
+        /// Determines whether [is all null] [the specified matrix].
+        /// </summary>
+        /// <param name="matrix">The matrix.</param>
+        /// <returns><c>true</c> if [is all null] [the specified matrix]; otherwise, <c>false</c>.</returns>
+        private static bool IsAllNull(double?[,] matrix)
+        {
+            foreach (var x in matrix) if (x.HasValue) return false;
+            return true;
+        }
+        /// <summary>
+        /// Kuhn-Munkres (KM) 算法实现（最大权重匹配）。
         /// 支持权重为负/零/正，无权边用 double.NegativeInfinity 填充。
         /// </summary>
         /// <param name="cost">方阵权重（size*size）</param>
         /// <param name="match">输出：左侧到右侧的匹配关系</param>
+        /// <param name="n"></param>
+        /// <param name="canAssign">是否允许匹配</param>
+        /// <param name="nRows">行数</param>
         /// <returns>最大总权重</returns>
-        private static double KuhnMunkres(double[,] cost, int[] match)
+        private static double KuhnMunkres(double[,] cost, int[] match, int n, bool[] canAssign)
         {
-            int n = cost.GetLength(0);
-            double[] lx = new double[n]; // 左侧顶点标签
-            double[] ly = new double[n]; // 右侧顶点标签
-            int[] py = new int[n]; // 右侧点的前驱
-            bool[] sx = new bool[n], sy = new bool[n];
+            var labelX = new double[n];
+            var labelY = new double[n];
+            var parentY = new int[n];
+            var committedX = new bool[n];
+            var committedY = new bool[n];
+            var prev = new int[n];
+            var slack = new double[n];
+            var slackX = new int[n];
+            var queue = new int[n];
 
+            // 初始化顶标
             for (int i = 0; i < n; i++)
             {
-                lx[i] = double.NegativeInfinity;
+                labelX[i] = double.NegativeInfinity;
                 for (int j = 0; j < n; j++)
-                    lx[i] = Math.Max(lx[i], cost[i, j]);
+                    labelX[i] = Math.Max(labelX[i], cost[i, j]);
             }
-            for (int i = 0; i < n; i++) ly[i] = 0;
+
+            Array.Fill(labelY, 0.0);
             Array.Fill(match, -1);
 
             for (int root = 0; root < n; root++)
             {
-                Array.Fill(sx, false);
-                Array.Fill(sy, false);
-                Array.Fill(py, -1);
+                if (root < canAssign.Length && !canAssign[root]) continue;
 
-                int[] queue = new int[n];
-                int front = 0, rear = 0;
-                queue[rear++] = root;
-                int[] prev = new int[n];
+                Array.Fill(committedX, false);
+                Array.Fill(committedY, false);
+                Array.Fill(parentY, -1);
                 Array.Fill(prev, -1);
-                double[] slack = new double[n];
-                int[] slackx = new int[n];
-
                 for (int j = 0; j < n; j++)
                 {
-                    slack[j] = lx[root] + ly[j] - cost[root, j];
-                    slackx[j] = root;
+                    slack[j] = labelX[root] + labelY[j] - cost[root, j];
+                    slackX[j] = root;
                 }
 
+                int front = 0, rear = 0;
+                queue[rear++] = root;
+
                 int x = -1, y = -1;
+                bool augmentFound = false;
                 while (true)
                 {
                     while (front < rear)
                     {
                         x = queue[front++];
-                        sx[x] = true;
+                        committedX[x] = true;
                         for (y = 0; y < n; y++)
                         {
-                            if (sy[y]) continue;
-                            double t = lx[x] + ly[y] - cost[x, y];
-                            if (t < 1e-8)
+                            if (committedY[y]) continue;
+                            double gap = labelX[x] + labelY[y] - cost[x, y];
+                            if (gap < Epsilon)
                             {
-                                sy[y] = true;
-                                py[y] = x;
-                                if (match[y] == -1) goto finish;
+                                committedY[y] = true;
+                                parentY[y] = x;
+                                if (match[y] == -1) { augmentFound = true; goto Augment; }
                                 queue[rear++] = match[y];
                                 prev[match[y]] = y;
                             }
-                            else if (t < slack[y])
+                            else if (gap < slack[y])
                             {
-                                slack[y] = t;
-                                slackx[y] = x;
+                                slack[y] = gap;
+                                slackX[y] = x;
                             }
                         }
                     }
-
-                    // 没有可增广路，调整顶标
+                    // 没有增广路，调整顶标
                     double delta = double.PositiveInfinity;
                     for (int j = 0; j < n; j++)
-                        if (!sy[j]) delta = Math.Min(delta, slack[j]);
-                    for (int i1 = 0; i1 < n; i1++) if (sx[i1]) lx[i1] -= delta;
+                        if (!committedY[j]) delta = Math.Min(delta, slack[j]);
+
+                    if (double.IsPositiveInfinity(delta)) break; // 【防死循环】
+
+                    for (int i = 0; i < n; i++) if (committedX[i]) labelX[i] -= delta;
                     for (int j = 0; j < n; j++)
                     {
-                        if (sy[j]) ly[j] += delta;
+                        if (committedY[j]) labelY[j] += delta;
                         else slack[j] -= delta;
                     }
                     for (int y1 = 0; y1 < n; y1++)
                     {
-                        if (!sy[y1] && slack[y1] < 1e-8)
+                        if (!committedY[y1] && slack[y1] < Epsilon)
                         {
-                            sy[y1] = true;
-                            py[y1] = slackx[y1];
-                            if (match[y1] == -1) { y = y1; goto finish; }
+                            committedY[y1] = true;
+                            parentY[y1] = slackX[y1];
+                            if (match[y1] == -1) { y = y1; augmentFound = true; goto Augment; }
                             queue[rear++] = match[y1];
                             prev[match[y1]] = y1;
                         }
                     }
                 }
-            finish:
-                // 增广
+            Augment:
+                if (!augmentFound) continue; // 【若未增广直接跳过，保证不会死循环】
+
                 while (y != -1)
                 {
-                    int x2 = py[y];
+                    int x2 = parentY[y];
                     int nextY = match[y];
                     match[y] = x2;
                     y = nextY;
                 }
             }
             // 计算最大权重和
-            double result = 0;
+            double result = 0.0;
             for (int y = 0; y < n; y++)
                 if (match[y] != -1 && cost[match[y], y] > double.NegativeInfinity / 2)
                     result += cost[match[y], y];
@@ -362,31 +424,93 @@ namespace Noob.Algorithms.OnlineBipartiteMatching
 
     }
 
+    /// <summary>
+    /// Defines test class HungarianMatchingTests.
+    /// </summary>
     [TestFixture]
-    public class WeightedMatchingTests
+    public class HungarianMatchingTests
     {
         /// <summary>
-        /// Defines the test method Simple_Bipartite_WeightMatching_Should_Work.
+        /// 标准方阵输入，所有节点都有唯一最优匹配。校验算法能找到最大权重总和（对角线）。
         /// </summary>
         [Test]
-        public void Simple_Bipartite_WeightMatching_Should_Work()
+        public void FullMatch_ExactMatrix_ShouldWork()
         {
-            // 3 doctors, 3 shifts，简单匹配
             double?[,] weights = {
-                { 8, 7, 6 },
+                { 9, 7, 6 },
                 { 6, 8, 7 },
                 { 7, 6, 8 }
             };
             var solver = new HungarianWeightedMatcher();
             var result = solver.Solve(weights);
 
+            // 断言每个左侧节点都能唯一分配一个右侧节点
             Assert.That(result.MatchLeftToRight.Length, Is.EqualTo(3));
-            // 每个医生都能唯一分配一个班次
             Assert.That(new HashSet<int>(result.MatchLeftToRight).Count, Is.EqualTo(3));
-            // 总权重应为24（对角线全8最优）
-            Assert.That(result.TotalWeight, Is.EqualTo(8 + 8 + 8).Within(1e-8));
+
+            // 最大总权重应为25（全部主对角线）
+            Assert.That(result.TotalWeight, Is.EqualTo(25).Within(1e-8));
         }
 
+        /// <summary>
+        /// 左侧实体多于右侧，测试部分节点匹配不到（单身）。
+        /// </summary>
+        [Test]
+        public void MoreLeftThanRight_ShouldHaveSingle()
+        {
+            double?[,] weights = {
+                { 10, null },
+                { 6,  11 },
+                { null,  9 }
+            };
+            var solver = new HungarianWeightedMatcher();
+            var result = solver.Solve(weights);
+
+            // 匹配数量不得超过右侧节点数量
+            Assert.That(result.MatchLeftToRight.Length, Is.EqualTo(3));
+            Assert.That(result.MatchLeftToRight.Count(x => x >= 0), Is.EqualTo(2));
+
+            // 剩余节点为单身（-1）
+            Assert.That(result.MatchLeftToRight.Count(x => x < 0), Is.EqualTo(1));
+            Assert.That(result.TotalWeight, Is.GreaterThan(0));
+        }
+
+
+        /// <summary>
+        /// 全为null（无可分配对），应返回所有单身，总权重为0。
+        /// </summary>
+        [Test]
+        public void AllNulls_ShouldAllSingle()
+        {
+            double?[,] weights = {
+                { null, null },
+                { null, null }
+            };
+            var solver = new HungarianWeightedMatcher();
+            var result = solver.Solve(weights);
+
+            // 所有节点都未分配
+            Assert.That(result.MatchLeftToRight, Is.All.LessThan(0));
+            Assert.That(result.TotalWeight, Is.EqualTo(0));
+        }
+
+        /// <summary>
+        /// 权重均为负值，算法应能正确找到最大（最小损失）匹配。
+        /// </summary>
+        [Test]
+        public void NegativeWeights_CorrectMax()
+        {
+            double?[,] weights = {
+                { -1, -2 },
+                { -2, -1 }
+            };
+            var solver = new HungarianWeightedMatcher();
+            var result = solver.Solve(weights);
+
+            // 只能选择 -1 和 -1 的配对
+            Assert.That(result.TotalWeight, Is.EqualTo(-2).Within(1e-8));
+            Assert.That(new HashSet<int>(result.MatchLeftToRight).Count, Is.EqualTo(2));
+        }
     }
 
 }
