@@ -172,6 +172,102 @@ namespace Noob.DataStructures
     }
 
     /// <summary>
+    /// 表示并查集结构（Disjoint Set Union, DSU/Union-Find）
+    /// 用于Kruskal MST算法高效判断环路与合并集合
+    /// </summary>
+    /// <typeparam name="TNode">节点类型</typeparam>
+    public class DisjointSet<TNode>
+    {
+        /// <summary>
+        /// The parent
+        /// </summary>
+        private readonly Dictionary<TNode, TNode> _parent = new();
+
+        /// <summary>
+        /// The rank
+        /// </summary>
+        private readonly Dictionary<TNode, int> _rank = new();
+
+        /// <summary>
+        /// 新增一个集合节点
+        /// </summary>
+        public void MakeSet(TNode node)
+        {
+            if (!_parent.ContainsKey(node))
+            {
+                _parent[node] = node;
+                _rank[node] = 0;
+            }
+        }
+
+        /// <summary>
+        /// 查找节点的集合代表（带路径压缩）
+        /// </summary>
+        public TNode Find(TNode node)
+        {
+            if (!EqualityComparer<TNode>.Default.Equals(_parent[node], node))
+                _parent[node] = Find(_parent[node]);
+            return _parent[node];
+        }
+
+        /// <summary>
+        /// 合并两个集合（按秩合并）
+        /// </summary>
+        public bool Union(TNode a, TNode b)
+        {
+            var pa = Find(a);
+            var pb = Find(b);
+            if (EqualityComparer<TNode>.Default.Equals(pa, pb))
+                return false; // 已在同集合
+            if (_rank[pa] < _rank[pb])
+                _parent[pa] = pb;
+            else
+            {
+                _parent[pb] = pa;
+                if (_rank[pa] == _rank[pb])
+                    _rank[pa]++;
+            }
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// 平台工程级 Kruskal 最小生成树算法（适用于无向带权图的边缘列表实现）
+    /// </summary>
+    /// <typeparam name="TNode">节点类型</typeparam>
+    public static class KruskalMstSolver
+    {
+        /// <summary>
+        /// 计算最小生成树
+        /// </summary>
+        /// <param name="nodes">所有节点集合</param>
+        /// <param name="edges">边列表（每条边需有权重）</param>
+        /// <returns>MST的边列表（无向图，边数=n-1，权重和最小）</returns>
+        public static List<Edge<TNode>> ComputeMinimumSpanningTree<TNode>(IEnumerable<TNode> nodes, IEnumerable<Edge<TNode>> edges)
+        {
+            var mst = new List<Edge<TNode>>();
+            var dsu = new DisjointSet<TNode>();
+            foreach (var node in nodes)
+                dsu.MakeSet(node);
+
+            // 按权重升序排序边
+            var sortedEdges = edges.OrderBy(e => e.Weight).ToList();
+
+            foreach (var edge in sortedEdges)
+            {
+                // Kruskal核心：若不在同集合则合并
+                if (dsu.Union(edge.From, edge.To))
+                    mst.Add(edge);
+                // 优化：若已足够n-1条边则可提前退出
+                if (mst.Count == nodes.Count() - 1)
+                    break;
+            }
+            return mst;
+        }
+    }
+
+
+    /// <summary>
     /// EdgeListGraph平台工程级功能单元测试
     /// </summary>
     [TestFixture]
