@@ -39,7 +39,7 @@ namespace Noob.DataStructures
         [TestCaseSource(nameof(MaxSumSubarraySource))]
         public void MaxSumSubarray1(double[] arr)
         {
-            Assert.IsTrue(arr != null && arr.Length > 0); //时间复杂度 O(n^3)
+            Assert.That(arr != null && arr.Length > 0); //时间复杂度 O(n^3)
             int n = arr.Length;
             double maxSum = double.MinValue;
             for (int subArraySize = 1; subArraySize <= n; ++subArraySize)  //O(n)
@@ -69,7 +69,7 @@ namespace Noob.DataStructures
         [TestCaseSource(nameof(MaxSumSubarraySource))]
         public void MaxSumSubarray2(double[] arr)
         {
-            Assert.IsTrue(arr != null && arr.Length > 0); //时间复杂度 O(n^2)
+            Assert.That(arr != null && arr.Length > 0); //时间复杂度 O(n^2)
             int n = arr.Length;
             double maxSum = double.MinValue;
             for (int startIndex = 0; startIndex < n; ++startIndex) //O(n)
@@ -97,7 +97,7 @@ namespace Noob.DataStructures
         [TestCaseSource(nameof(MaxSumSubarraySource))]
         public void MaxSumSubarray3(double[] arr)
         {
-            Assert.IsTrue(arr != null && arr.Length > 0); 
+            Assert.That(arr != null && arr.Length > 0); 
             int n = arr.Length;
             double maxSum = MaxSumSubarrayByDivide(arr,n);
             Console.WriteLine($"分治(总和最大区间),maxSum:{maxSum}，arr:{string.Join(",", arr)}");
@@ -152,7 +152,7 @@ namespace Noob.DataStructures
         [TestCaseSource(nameof(MaxSumSubarraySource))]
         public void MaxSumSubarray4(double[] arr)
         {
-            Assert.IsTrue(arr != null && arr.Length > 0);
+            Assert.That(arr != null && arr.Length > 0);
             int n = arr.Length;
             double maxSum =double.MinValue,sum=0d;
             for (int i = 0; i < n; i++)
