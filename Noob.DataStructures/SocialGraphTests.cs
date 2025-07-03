@@ -570,17 +570,17 @@ namespace Noob.DataStructures
             _socialGraph = new SocialGraph(_redisStore);
         }
 
-        /// <summary>
-        /// 测试后清理Redis，保证环境隔离
-        /// </summary>
-        [OneTimeTearDown]
-        public async Task TearDown()
-        {
-            var endpoints = _redis.GetEndPoints();
-            var server = _redis.GetServer(endpoints[0]);
-            foreach (var key in server.Keys(database: 0, pattern: "*"))
-                await _db.KeyDeleteAsync(key);
-        }
+        ///// <summary>
+        ///// 测试后清理Redis，保证环境隔离
+        ///// </summary>
+        //[OneTimeTearDown]
+        //public async Task TearDown()
+        //{
+        //    var endpoints = _redis.GetEndPoints();
+        //    var server = _redis.GetServer(endpoints[0]);
+        //    foreach (var key in server.Keys(database: 0, pattern: "*"))
+        //        await _db.KeyDeleteAsync(key);
+        //}
 
         /// <summary>
         /// 测试基本关注、取关、关系判定和分页查询
