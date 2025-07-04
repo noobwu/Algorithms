@@ -148,7 +148,7 @@ namespace Noob.DataStructures
                     bool found = false;
                     foreach (var pos in positionsList[i].GetViewBetween(prev + 1, prev + maxDistance))
                     {
-                        prev = pos;`
+                        prev = pos;
                         found = true;
                         break;
                     }
