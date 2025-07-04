@@ -38,13 +38,21 @@ namespace Noob.DataStructures
             {
                 var term = kv.Key;
                 var positions = kv.Value ?? new List<int>();
+
                 _termToPostings.AddOrUpdate(term,
                     _ => new List<Posting> { new Posting(documentId, positions) },
                     (_, list) =>
                     {
-                        lock (list) // 保证并发下插入安全
+                        lock (list)
                         {
-                            list.Add(new Posting(documentId, positions));
+                            // 保证唯一文档（可选：支持文档更新）
+                            var exist = list.FindIndex(p => p.DocumentId == documentId);
+                            if (exist >= 0)
+                                list[exist] = new Posting(documentId, positions); // 覆盖
+                            else
+                                list.Add(new Posting(documentId, positions));
+                            // Posting列表按文档ID排序，便于后续高效交集
+                            list.Sort((a, b) => string.CompareOrdinal(a.DocumentId, b.DocumentId));
                             return list;
                         }
                     });
@@ -52,48 +60,36 @@ namespace Noob.DataStructures
         }
 
         /// <summary>
-        /// 平台正式环境：近邻短语检索。
-        /// 查询所有包含 phraseTerms，且各词项间距离不超过 maxDistance 的文档ID。
+        /// 高性能近邻短语检索（滑动窗口+二分查找）。
         /// </summary>
         /// <param name="phraseTerms">短语词项数组，按顺序排列</param>
         /// <param name="maxDistance">词项间最大距离（≥1），1表示紧邻</param>
-        /// <returns>命中的文档ID集合</returns>
-        /// <exception cref="ArgumentNullException">参数为null时抛出</exception>
-        /// <exception cref="ArgumentException">参数非法时抛出</exception>
         public HashSet<string> SearchDocumentsByNearPhrase(IList<string> phraseTerms, int maxDistance)
         {
             if (phraseTerms == null || phraseTerms.Count == 0)
-                throw new ArgumentNullException(nameof(phraseTerms), "短语词项不能为空");
+                throw new ArgumentNullException(nameof(phraseTerms));
             if (maxDistance < 1)
                 throw new ArgumentException("最大距离需为正整数", nameof(maxDistance));
             if (phraseTerms.Count == 1)
                 return SearchDocumentsByTerms(phraseTerms);
 
-            // 步骤1：找出包含所有词项的文档ID交集
+            // Posting列表交集，先过滤可能文档
             var candidateDocIds = SearchDocumentsByTerms(phraseTerms);
             if (candidateDocIds.Count == 0)
                 return new HashSet<string>();
 
             var results = new HashSet<string>();
-
-            // 步骤2：对每个候选文档，逐一验证是否满足“近邻短语”关系
             foreach (var docId in candidateDocIds)
             {
-                // 取该文档中各词项出现的所有位置（已保证文档中都包含每个词）
-                var positionsList = new List<List<int>>(phraseTerms.Count);
-                foreach (var term in phraseTerms)
+                // 找到每个词项在该文档中的所有有序位置
+                var positionsList = phraseTerms.Select(term =>
                 {
-                    // 为平台高性能，这里建议预排序或二分定位positions
-                    var postings = _termToPostings.TryGetValue(term, out var postingList)
-                        ? postingList
-                        : null;
-                    var p = postings?.FirstOrDefault(x => x.DocumentId == docId);
-                    positionsList.Add(p?.Positions ?? new List<int>());
-                }
-                if (positionsList.Any(l => l.Count == 0))
-                    continue;
+                    var postings = _termToPostings.TryGetValue(term, out var list)
+                        ? list : null;
+                    return postings?.FirstOrDefault(p => p.DocumentId == docId)?.Positions ?? new SortedSet<int>();
+                }).ToList();
 
-                // 检查近邻短语逻辑
+                // 优化：滑动窗口+递归消除O(N^k)爆炸
                 if (MatchNearPhrase(positionsList, maxDistance))
                 {
                     results.Add(docId);
@@ -102,31 +98,59 @@ namespace Noob.DataStructures
             return results;
         }
 
+
         /// <summary>
-        /// 检查是否存在一组递增位置满足“近邻短语”关系。
+        /// 多词AND检索（Posting列表归并交集）。
+        /// </summary>
+        public HashSet<string> SearchDocumentsByTerms(ICollection<string> terms)
+        {
+            if (terms == null || terms.Count == 0)
+                throw new ArgumentNullException(nameof(terms));
+            List<List<Posting>> postingsLists = new List<List<Posting>>(terms.Count);
+
+            foreach (var term in terms)
+            {
+                if (_termToPostings.TryGetValue(term, out var postings))
+                    postingsLists.Add(postings);
+                else
+                    return new HashSet<string>();
+            }
+
+            // 先按Posting数量升序排序，优化归并
+            postingsLists.Sort((a, b) => a.Count.CompareTo(b.Count));
+            // Posting列表交集（按文档ID有序多路归并）
+            var result = postingsLists[0].Select(p => p.DocumentId).ToHashSet();
+            foreach (var postings in postingsLists.Skip(1))
+            {
+                var set = postings.Select(p => p.DocumentId).ToHashSet();
+                result.IntersectWith(set);
+                if (result.Count == 0) break;
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// 利用有序结构优化近邻短语匹配（滑动窗口）。
         /// </summary>
         /// <param name="positionsList">各词项在文档中的出现位置（已按词项顺序排列）</param>
         /// <param name="maxDistance">相邻词项最大允许距离</param>
         /// <returns>只要存在一组满足条件即返回true</returns>
-        private bool MatchNearPhrase(List<List<int>> positionsList, int maxDistance)
+        private bool MatchNearPhrase(List<SortedSet<int>> positionsList, int maxDistance)
         {
-            // BFS/滑动窗口算法：枚举第一个词的位置，逐级寻找后续词项合规位置
+            // 使用队列滑动窗口遍历所有首词位置
             foreach (var start in positionsList[0])
             {
                 int prev = start;
                 bool match = true;
                 for (int i = 1; i < positionsList.Count; i++)
                 {
-                    // 找到下一个词中第一个比prev大、且距离≤maxDistance的位置
+                    // 二分/跳跃找下一个词项最小满足条件的位置
                     bool found = false;
-                    foreach (var pos in positionsList[i])
+                    foreach (var pos in positionsList[i].GetViewBetween(prev + 1, prev + maxDistance))
                     {
-                        if (pos > prev && pos - prev <= maxDistance)
-                        {
-                            prev = pos;
-                            found = true;
-                            break;
-                        }
+                        prev = pos;`
+                        found = true;
+                        break;
                     }
                     if (!found)
                     {
@@ -137,33 +161,6 @@ namespace Noob.DataStructures
                 if (match) return true;
             }
             return false;
-        }
-
-        /// <summary>
-        /// 多关键词 AND 查询：返回包含所有关键词的文档ID集合。
-        /// </summary>
-        /// <param name="terms">词项集合</param>
-        /// <returns>文档ID集合</returns>
-        /// <exception cref="ArgumentNullException">参数为null时抛出</exception>
-        public HashSet<string> SearchDocumentsByTerms(ICollection<string> terms)
-        {
-            if (terms == null || terms.Count == 0)
-                throw new ArgumentNullException(nameof(terms));
-            List<HashSet<string>> docSets = new List<HashSet<string>>(terms.Count);
-
-            foreach (var term in terms)
-            {
-                if (_termToPostings.TryGetValue(term, out var postings))
-                    docSets.Add(postings.Select(p => p.DocumentId).ToHashSet());
-                else
-                    return new HashSet<string>();
-            }
-
-            // 求交集
-            var result = docSets[0];
-            for (int i = 1; i < docSets.Count; i++)
-                result.IntersectWith(docSets[i]);
-            return result;
         }
 
         /// <summary>
@@ -194,7 +191,7 @@ namespace Noob.DataStructures
         /// <summary>
         /// 该词项在文档中出现的位置（可多次出现）。
         /// </summary>
-        public List<int> Positions { get; }
+        public SortedSet<int> Positions { get; }
 
         /// <summary>
         /// Posting 构造函数。
@@ -204,7 +201,9 @@ namespace Noob.DataStructures
         public Posting(string documentId, IEnumerable<int> positions)
         {
             DocumentId = documentId ?? throw new ArgumentNullException(nameof(documentId));
-            Positions = positions?.OrderBy(p => p).ToList() ?? new List<int>();
+
+            // SortedSet 保证有序、唯一
+            Positions = positions != null ? [.. positions] : new SortedSet<int>();
         }
     }
 
