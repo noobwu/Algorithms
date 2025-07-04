@@ -1,14 +1,12 @@
-﻿using NUnit.Framework;
-using System;
+﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using NUnit.Framework;
 
 namespace Noob.DataStructures
 {
-    using System;
-    using System.Collections.Concurrent;
-    using System.Collections.Generic;
-    using System.Linq;
+   
 
     /// <summary>
     /// 生产平台级倒排索引，支持高效的短语及近邻短语检索。
