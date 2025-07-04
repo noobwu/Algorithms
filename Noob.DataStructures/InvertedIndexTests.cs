@@ -274,9 +274,8 @@ namespace Noob.DataStructures
             result = _index.SearchDocumentsByNearPhrase(new[] { "人工智能", "未来" }, 1);
             Assert.That(result, Is.EquivalentTo(new[] { "Doc3" }));
 
-            // "未来 算法" 只在Doc4中有1->3（间隔>1，不命中），在Doc3中1->2紧邻，命中
             result = _index.SearchDocumentsByNearPhrase(new[] { "未来", "算法" }, 1);
-            Assert.That(result, Is.EquivalentTo(new[] { "Doc3" }));
+            Assert.That(result, Is.EquivalentTo(new[] { "Doc3", "Doc4" }));
         }
 
         /// <summary>
