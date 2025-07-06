@@ -177,15 +177,37 @@ namespace Noob.Algorithms
         /// </summary>
         private class SimplePriorityQueue
         {
+            /// <summary>
+            /// The set
+            /// </summary>
             private readonly SortedSet<(double priority, int node, int idx)> _set = new();
+
+            /// <summary>
+            /// The insert index
+            /// </summary>
             private int _insertIndex = 0;
 
+            /// <summary>
+            /// Gets the count.
+            /// </summary>
+            /// <value>The count.</value>
             public int Count => _set.Count;
 
+            /// <summary>
+            /// Enqueues the specified node.
+            /// </summary>
+            /// <param name="node">The node.</param>
+            /// <param name="priority">The priority.</param>
             public void Enqueue(int node, double priority)
             {
                 _set.Add((priority, node, _insertIndex++));
             }
+
+            /// <summary>
+            /// Dequeues this instance.
+            /// </summary>
+            /// <returns>System.Int32.</returns>
+            /// <exception cref="System.InvalidOperationException">队列为空</exception>
             public int Dequeue()
             {
                 if (_set.Count == 0) throw new InvalidOperationException("队列为空");
