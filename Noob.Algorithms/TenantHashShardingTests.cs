@@ -104,12 +104,13 @@ namespace Noob.Algorithms
             TableNames = Enumerable.Range(0, tableCount).Select(i => $"{tablePrefix}{i:D2}").ToList();
             VirtualNodes = virtualNodes;
 
-            // 初始化虚节点环
+            // 用 Guid 填充虚节点hash空间
             foreach (var table in TableNames)
             {
                 for (int v = 0; v < virtualNodes; v++)
                 {
-                    long hash = ComputeHash($"{table}#VN{v}");
+                    var guid = Guid.NewGuid().ToString("N");
+                    long hash = ComputeHash(guid);
                     _hashRing[hash] = table;
                 }
             }
@@ -122,12 +123,20 @@ namespace Noob.Algorithms
         {
             long hash = ComputeHash(tenantId.ToString());
             if (_hashRing.Count == 0) throw new InvalidOperationException("虚节点环未初始化");
-            foreach (var kv in _hashRing)
+
+            // 二分查找hash环（性能O(log N)）
+            var keys = _hashRing.Keys.ToList();
+            int left = 0, right = keys.Count - 1;
+            while (left <= right)
             {
-                if (hash <= kv.Key)
-                    return kv.Value;
+                int mid = left + (right - left) / 2;
+                if (hash <= keys[mid]) right = mid - 1;
+                else left = mid + 1;
             }
-            return _hashRing.First().Value;
+            // keys[left] 是第一个大于等于hash的虚节点，否则回绕
+            if (left < keys.Count)
+                return _hashRing[keys[left]];
+            return _hashRing[keys[0]];
         }
 
         /// <summary>
@@ -204,8 +213,9 @@ namespace Noob.Algorithms
 
             for (int i = 1; i <= 80000; i++)
             {
-                // tenantId 先转字符串再 ComputeHash，模拟真实环境
-                long tenantId = ComputeHash(i.ToString());
+                // 测试时也用 Guid 随机填充，模拟真实乱序 hash 空间
+                var key = Guid.NewGuid().ToString("N");
+                long tenantId = ComputeHash(key);
                 string tbl = router.RouteToTable(tenantId);
                 int idx = int.Parse(tbl.Split('_')[1]);
                 buckets[idx]++;
