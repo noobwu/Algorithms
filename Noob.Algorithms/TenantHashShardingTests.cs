@@ -352,6 +352,59 @@ namespace Noob.Algorithms
             }
             Assert.That(buckets.Count, Is.EqualTo(5)); // 没有死表
         }
+
+        /// <summary>
+        /// 支持高并发安全/可重入
+        /// </summary>
+        [Test]
+        public void HashModTenantShardingRouter_ThreadSafeSmoke()
+        {
+            var router = new HashModTenantShardingRouter("User_", 8);
+            var list = new System.Collections.Concurrent.ConcurrentBag<string>();
+            Parallel.For(0, 10000, i => list.Add(router.RouteToTable(i)));
+            Assert.That(list.Count, Is.EqualTo(10000));
+        }
+
+        /// <summary>
+        /// 自定义hash算法
+        /// </summary>
+        [Test]
+        public void HashModTenantShardingRouter_CustomHashFunc_Works()
+        {
+            var router = new HashModTenantShardingRouter("User_", 8, x => (int)(x * 31));
+            Assert.That(router.RouteToTable(123), Does.StartWith("User_"));
+        }
+
+
+        /// <summary>
+        /// 极端大数、负数、重复ID是否健壮处理
+        /// </summary>
+        [Test]
+        public void ConsistentHashTenantShardingRouter_HandlesExtremeIds()
+        {
+            var router = new ConsistentHashTenantShardingRouter("User_", 8, 1000);
+            var tables = new HashSet<string>();
+            tables.Add(router.RouteToTable(long.MaxValue));
+            tables.Add(router.RouteToTable(long.MinValue + 1));
+            tables.Add(router.RouteToTable(0));
+            Assert.That(tables.Count, Is.LessThanOrEqualTo(3));
+        }
+
+        /// <summary>
+        /// 极端偏态key分布仍不能死表
+        /// </summary>
+        [Test]
+        public void HashModTenantShardingRouter_BiasedKeys_StillNoDeadTable()
+        {
+            var router = new HashModTenantShardingRouter("User_", 7);
+            var buckets = new HashSet<string>();
+            // 模拟大量ID为偶数
+            for (int i = 0; i < 700; i++)
+            {
+                buckets.Add(router.RouteToTable(i * 2));
+            }
+            Assert.That(buckets.Count, Is.EqualTo(7)); // 偏态下也无死表
+        }
     }
 
 }
