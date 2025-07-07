@@ -153,6 +153,7 @@ namespace Noob.Algorithms
             TableNames = Enumerable.Range(0, tableCount).Select(i => $"{tablePrefix}{i:D2}").ToList();
             VirtualNodes = virtualNodes;
             _hashRing = new Dictionary<long, string>(tableCount * virtualNodes);
+
             // 虚节点密集填充（hash算法与Key一致）
             for (int i = 0; i < tableCount; i++)
             {
@@ -160,7 +161,7 @@ namespace Noob.Algorithms
                 for (int v = 0; v < virtualNodes; v++)
                 {
                     // 虚节点ID用确定性字符串，避免hash冲突和空间聚集
-                    // 测试时也用 Guid 随机填充，模拟真实乱序 hash 空间
+                    // 用 Guid 随机填充，模拟真实乱序 hash 空间
                     var guidKey = Guid.NewGuid().ToString("N");
                     var vnodeKey = $"{table}#VN{v}#{guidKey}";
                     long hash = ComputeHash(vnodeKey);
@@ -293,6 +294,63 @@ namespace Noob.Algorithms
             int h2 = (int)((long.MinValue ^ (long.MinValue >> 32)) & 0x7FFFFFFF);
             Assert.That(h1, Is.GreaterThanOrEqualTo(0));
             Assert.That(h2, Is.GreaterThanOrEqualTo(0));
+        }
+
+        /// <summary>
+        /// 相同租户ID始终落同一表
+        /// </summary>
+        [Test]
+        public void HashModTenantShardingRouter_SameId_AlwaysSameTable()
+        {
+            var router = new HashModTenantShardingRouter("User_", 8);
+            var tbl1 = router.RouteToTable(42);
+            var tbl2 = router.RouteToTable(42);
+            Assert.That(tbl1, Is.EqualTo(tbl2));
+        }
+
+        /// <summary>
+        /// 相同租户ID始终落同一表
+        /// </summary>
+        [Test]
+        public void ConsistentHashTenantShardingRouter_SameId_AlwaysSameTable()
+        {
+            var router = new ConsistentHashTenantShardingRouter("User_", 8, 1000);
+            var tbl1 = router.RouteToTable(123456789);
+            var tbl2 = router.RouteToTable(123456789);
+            Assert.That(tbl1, Is.EqualTo(tbl2));
+        }
+
+        /// <summary>
+        /// 每个表至少被命中一次（防死表）
+        /// </summary>
+        [Test]
+        public void HashModTenantShardingRouter_EachTableHasData()
+        {
+            var router = new HashModTenantShardingRouter("User_", 11);
+            var buckets = new HashSet<string>();
+            for (int i = 0; i < 220; i++)
+            {
+                buckets.Add(router.RouteToTable(i));
+            }
+            Assert.That(buckets.Count, Is.EqualTo(11)); // 没有死表
+        }
+
+        /// <summary>
+        /// 每个表至少被命中一次（防死表）
+        /// </summary>
+        [Test]
+        public void ConsistentHashTenantShardingRouter_EachTableHasData()
+        {
+            var router = new ConsistentHashTenantShardingRouter("User_", 5, 1000);
+            var buckets = new HashSet<string>();
+            for (int i = 0; i < 5000; i++)
+            {
+                // 使用与虚节点一致的hash算法生成key
+                var key = $"{Guid.NewGuid().ToString("N")}#{i}";
+                long tenantId = ComputeHash(key);
+                buckets.Add(router.RouteToTable(tenantId));
+            }
+            Assert.That(buckets.Count, Is.EqualTo(5)); // 没有死表
         }
     }
 
