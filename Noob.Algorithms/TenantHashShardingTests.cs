@@ -38,35 +38,79 @@ namespace Noob.Algorithms
     /// </summary>
     public class HashModTenantShardingRouter : ITenantShardingRouter
     {
-        /// <summary> 分表总数 </summary>
+        /// <summary> 分表总数(强烈建议2的幂或质数) </summary>
         public int TableCount { get; }
         /// <summary> 分表前缀 </summary>
         public string TablePrefix { get; }
 
         /// <summary>
+        /// The hash function
+        /// </summary>
+        private readonly Func<long, int> _hashFunc;
+
+        /// <summary>
         /// 构造函数
         /// </summary>
-        /// <param name="tablePrefix">用户表前缀</param>
-        /// <param name="tableCount">分表总数（建议为2的幂或质数）</param>
-        public HashModTenantShardingRouter(string tablePrefix, int tableCount)
+        /// <param name="tablePrefix">表前缀</param>
+        /// <param name="tableCount">分表总数（强烈建议2的幂或质数）</param>
+        /// <param name="hashFunc">可选自定义hash函数</param>
+        public HashModTenantShardingRouter(string tablePrefix, int tableCount, Func<long, int>? hashFunc = null)
         {
             if (tableCount <= 1) throw new ArgumentException("分表总数必须大于1", nameof(tableCount));
+            if (!IsPrime(tableCount) && !IsPowerOfTwo(tableCount))
+                throw new ArgumentException("分表数建议为质数或2的幂，提升分布均匀性", nameof(tableCount));
             TablePrefix = tablePrefix ?? throw new ArgumentNullException(nameof(tablePrefix));
             TableCount = tableCount;
+            _hashFunc = hashFunc ?? DefaultHash;
         }
 
         /// <summary>
-        /// 路由到分表：hash(tenantId) % TableCount
+        /// 根据租户ID分表
         /// </summary>
-        /// <param name="tenantId">租户ID</param>
-        /// <returns>分表名</returns>
         public string RouteToTable(long tenantId)
         {
-            // 推荐使用高质量Hash算法，此处为简单混淆示例
-            int hash = (int)((tenantId ^ (tenantId >> 16)) & 0x7FFFFFFF);
+            int hash = _hashFunc(tenantId) & 0x7FFFFFFF;
             int tableIdx = hash % TableCount;
             return $"{TablePrefix}{tableIdx:D2}";
         }
+
+        /// <summary>
+        /// Defaults the hash.
+        /// </summary>
+        /// <param name="x">The x.</param>
+        /// <returns>System.Int32.</returns>
+        private static int DefaultHash(long x)
+        {
+            // 高低位混合+Avalanche effect
+            x = (~x) + (x << 18); // x = (x << 18) - x - 1;
+            x = x ^ (x >> 31);
+            x = x * 21;
+            x = x ^ (x >> 11);
+            x = x + (x << 6);
+            x = x ^ (x >> 22);
+            return (int)x;
+        }
+
+        /// <summary>
+        /// Determines whether the specified n is prime.
+        /// </summary>
+        /// <param name="n">The n.</param>
+        /// <returns><c>true</c> if the specified n is prime; otherwise, <c>false</c>.</returns>
+        private static bool IsPrime(int n) =>
+            n switch
+            {
+                < 2 => false,
+                2 => true,
+                _ when n % 2 == 0 => false,
+                _ => !Enumerable.Range(3, (int)Math.Sqrt(n) / 2).Any(i => n % i == 0)
+            };
+
+        /// <summary>
+        /// Determines whether [is power of two] [the specified n].
+        /// </summary>
+        /// <param name="n">The n.</param>
+        /// <returns><c>true</c> if [is power of two] [the specified n]; otherwise, <c>false</c>.</returns>
+        private static bool IsPowerOfTwo(int n) => (n & (n - 1)) == 0;
     }
 
     /// <summary>
@@ -75,9 +119,14 @@ namespace Noob.Algorithms
     public class ConsistentHashTenantShardingRouter : ITenantShardingRouter
     {
         /// <summary>
+        /// The hash ring keys
+        /// </summary>
+        private readonly List<long> _hashRingKeys;
+
+        /// <summary>
         /// The hash ring
         /// </summary>
-        private readonly SortedDictionary<long, string> _hashRing = new();
+        private readonly Dictionary<long, string> _hashRing = new();
 
         /// <summary>
         /// Gets the table names.
@@ -103,40 +152,35 @@ namespace Noob.Algorithms
             if (virtualNodes < 1) throw new ArgumentException("虚节点数必须大于0", nameof(virtualNodes));
             TableNames = Enumerable.Range(0, tableCount).Select(i => $"{tablePrefix}{i:D2}").ToList();
             VirtualNodes = virtualNodes;
-
-            // 用 Guid 填充虚节点hash空间
-            foreach (var table in TableNames)
+            _hashRing = new Dictionary<long, string>(tableCount * virtualNodes);
+            // 虚节点密集填充（hash算法与Key一致）
+            for (int i = 0; i < tableCount; i++)
             {
+                var table = TableNames[i];
                 for (int v = 0; v < virtualNodes; v++)
                 {
-                    var guid = Guid.NewGuid().ToString("N");
-                    long hash = ComputeHash(guid);
+                    // 虚节点ID用确定性字符串，避免hash冲突和空间聚集
+                    // 测试时也用 Guid 随机填充，模拟真实乱序 hash 空间
+                    var guidKey = Guid.NewGuid().ToString("N");
+                    var vnodeKey = $"{table}#VN{v}#{guidKey}";
+                    long hash = ComputeHash(vnodeKey);
                     _hashRing[hash] = table;
                 }
             }
+            _hashRingKeys = _hashRing.Keys.OrderBy(x => x).ToList();
         }
 
         /// <summary>
-        /// 路由到顺时针最近表
+        /// 路由到hash环上顺时针最近的虚节点（用二分查找）
         /// </summary>
         public string RouteToTable(long tenantId)
         {
             long hash = ComputeHash(tenantId.ToString());
-            if (_hashRing.Count == 0) throw new InvalidOperationException("虚节点环未初始化");
-
-            // 二分查找hash环（性能O(log N)）
-            var keys = _hashRing.Keys.ToList();
-            int left = 0, right = keys.Count - 1;
-            while (left <= right)
-            {
-                int mid = left + (right - left) / 2;
-                if (hash <= keys[mid]) right = mid - 1;
-                else left = mid + 1;
-            }
-            // keys[left] 是第一个大于等于hash的虚节点，否则回绕
-            if (left < keys.Count)
-                return _hashRing[keys[left]];
-            return _hashRing[keys[0]];
+            int idx = _hashRingKeys.BinarySearch(hash);
+            if (idx < 0) idx = ~idx;
+            if (idx == _hashRingKeys.Count) idx = 0; // 环回绕
+            long vnodeHash = _hashRingKeys[idx];
+            return _hashRing[vnodeHash];
         }
 
         /// <summary>
