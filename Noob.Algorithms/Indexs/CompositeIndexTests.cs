@@ -309,6 +309,10 @@ namespace Noob.Algorithms.Indexs
         /// <value>The tags.</value>
         public HashSet<string> Tags { get; set; }
 
+        /// <summary>
+        /// 返回实体所有用于索引的属性（字段名→值），可包含标签、属性等。
+        /// </summary>
+        /// <returns>IReadOnlyDictionary&lt;System.String, System.Object&gt;.</returns>
         public IReadOnlyDictionary<string, object> GetIndexAttributes()
             => new Dictionary<string, object>
             {
