@@ -321,11 +321,11 @@ namespace Noob.Algorithms.Maps
                 2, gs => new KdVector(gs.Longitude, gs.Latitude));
             var stations = new[]
             {
-            new GasStation { Id = "A", Longitude = 0, Latitude = 0 },
-            new GasStation { Id = "B", Longitude = 1, Latitude = 1 },
-            new GasStation { Id = "C", Longitude = 2, Latitude = 2 },
-            new GasStation { Id = "D", Longitude = 10, Latitude = 10 }
-        };
+                new GasStation { Id = "A", Longitude = 0, Latitude = 0 },
+                new GasStation { Id = "B", Longitude = 1, Latitude = 1 },
+                new GasStation { Id = "C", Longitude = 2, Latitude = 2 },
+                new GasStation { Id = "D", Longitude = 10, Latitude = 10 }
+            };
             kdTree.Build(stations);
 
             var nearest = kdTree.SearchKNearest(new KdVector(0, 0), 3);
@@ -343,12 +343,13 @@ namespace Noob.Algorithms.Maps
         public void NearestNeighbor_KGreaterThanCount_ReturnsAll()
         {
             var kdTree = new KdTree<GasStation>(
-                2, gs => new KdVector(gs.Longitude, gs.Latitude));
+                2, gs => new KdVector(gs.Longitude, gs.Latitude)
+             );
             var stations = new[]
             {
-            new GasStation { Id = "A", Longitude = 0, Latitude = 0 },
-            new GasStation { Id = "B", Longitude = 10, Latitude = 10 }
-        };
+                new GasStation { Id = "A", Longitude = 0, Latitude = 0 },
+                new GasStation { Id = "B", Longitude = 10, Latitude = 10 }
+            };
             kdTree.Build(stations);
 
             var nearest = kdTree.SearchKNearest(new KdVector(5, 5), 5);
@@ -387,7 +388,8 @@ namespace Noob.Algorithms.Maps
         public void Insert_AfterBuild_NewPointFound()
         {
             var kdTree = new KdTree<GasStation>(
-                2, gs => new KdVector(gs.Longitude, gs.Latitude));
+                2, gs => new KdVector(gs.Longitude, gs.Latitude)
+            );
             var a = new GasStation { Id = "A", Longitude = 0, Latitude = 0 };
             kdTree.Build(new[] { a });
 
