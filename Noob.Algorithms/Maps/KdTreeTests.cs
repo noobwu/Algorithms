@@ -1,89 +1,51 @@
-﻿using NUnit.Framework;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-
+using NUnit.Framework;
 
 namespace Noob.Algorithms.Maps
 {
-
     /// <summary>
-    /// 封装距离和节点，用于最近邻排序堆。
-    /// </summary>
-    public class DistanceNode<T> : IComparable<DistanceNode<T>>
-    {
-        /// <summary>
-        /// Gets the distance.
-        /// </summary>
-        /// <value>The distance.</value>
-        public double Distance { get; }
-
-        /// <summary>
-        /// Gets the node.
-        /// </summary>
-        /// <value>The node.</value>
-        public KdTreeNode<T> Node { get; }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="DistanceNode{T}"/> class.
-        /// </summary>
-        /// <param name="distance">The distance.</param>
-        /// <param name="node">The node.</param>
-        public DistanceNode(double distance, KdTreeNode<T> node)
-        {
-            Distance = distance;
-            Node = node;
-        }
-
-        /// <summary>
-        /// Compares the current instance with another object of the same type and returns an integer that indicates whether the current instance precedes, follows, or occurs in the same position in the sort order as the other object.
-        /// </summary>
-        /// <param name="other">An object to compare with this instance.</param>
-        /// <returns>A value that indicates the relative order of the objects being compared. The return value has these meanings:
-        /// <list type="table"><listheader><term> Value</term><description> Meaning</description></listheader><item><term> Less than zero</term><description> This instance precedes <paramref name="other" /> in the sort order.</description></item><item><term> Zero</term><description> This instance occurs in the same position in the sort order as <paramref name="other" />.</description></item><item><term> Greater than zero</term><description> This instance follows <paramref name="other" /> in the sort order.</description></item></list></returns>
-        public int CompareTo(DistanceNode<T> other)
-        {
-            int cmp = Distance.CompareTo(other.Distance);
-            if (cmp == 0) cmp = Node.GetHashCode().CompareTo(other.Node.GetHashCode());
-            return cmp;
-        }
-    }
-
-    /// <summary>
-    /// 表示一个通用的 K 维向量。
+    /// 表示 K 维向量，支持任意维度点的空间索引。
     /// </summary>
     public class KdVector
     {
-        /// <summary>
-        /// 维度数据。
-        /// </summary>
+        /// <summary> 向量的所有维度数据。 </summary>
         public double[] Coordinates { get; }
 
         /// <summary>
-        /// 构造函数，传入维度数据。
+        /// 构造函数，传入所有维度的数值。
         /// </summary>
-        /// <param name="coordinates">向量各维的数值。</param>
+        /// <param name="coordinates">所有维度数值。</param>
         public KdVector(params double[] coordinates)
         {
-            Coordinates = coordinates ?? throw new ArgumentNullException(nameof(coordinates));
+            if (coordinates == null || coordinates.Length == 0)
+                throw new ArgumentException("维度不能为空", nameof(coordinates));
+            Coordinates = coordinates;
         }
 
         /// <summary>
-        /// 获取向量指定维度的值。
+        /// 获取指定维度的值。
         /// </summary>
+        /// <param name="index">维度索引。</param>
         public double this[int index] => Coordinates[index];
 
         /// <summary>
-        /// 计算欧氏距离。
+        /// 向量长度（维度）。
+        /// </summary>
+        public int Dimension => Coordinates.Length;
+
+        /// <summary>
+        /// 欧式距离。
         /// </summary>
         public double DistanceTo(KdVector other)
         {
-            if (other.Coordinates.Length != Coordinates.Length)
-                throw new ArgumentException("维度不匹配");
+            if (other.Dimension != Dimension)
+                throw new ArgumentException("维度不一致", nameof(other));
             double sum = 0;
-            for (int i = 0; i < Coordinates.Length; i++)
+            for (int i = 0; i < Dimension; i++)
             {
-                var diff = Coordinates[i] - other.Coordinates[i];
+                double diff = Coordinates[i] - other.Coordinates[i];
                 sum += diff * diff;
             }
             return Math.Sqrt(sum);
@@ -91,38 +53,23 @@ namespace Noob.Algorithms.Maps
     }
 
     /// <summary>
-    /// KD-Tree 节点。
+    /// KD-Tree 节点类型。
     /// </summary>
-    /// <typeparam name="T">关联数据类型。</typeparam>
     public class KdTreeNode<T>
     {
-        /// <summary>
-        /// 当前节点的向量。
-        /// </summary>
+        /// <summary>节点向量。</summary>
         public KdVector Vector { get; }
-
-        /// <summary>
-        /// 存储的实体对象。
-        /// </summary>
+        /// <summary>业务数据。</summary>
         public T Data { get; }
-
-        /// <summary>
-        /// 左子树。
-        /// </summary>
+        /// <summary>左子树。</summary>
         public KdTreeNode<T> Left { get; set; }
-
-        /// <summary>
-        /// 右子树。
-        /// </summary>
+        /// <summary>右子树。</summary>
         public KdTreeNode<T> Right { get; set; }
-
-        /// <summary>
-        /// 分割轴。
-        /// </summary>
+        /// <summary>分割轴。</summary>
         public int Axis { get; set; }
 
         /// <summary>
-        /// 构造 KD-Tree 节点。
+        /// 构造节点。
         /// </summary>
         public KdTreeNode(KdVector vector, T data, int axis)
         {
@@ -133,9 +80,9 @@ namespace Noob.Algorithms.Maps
     }
 
     /// <summary>
-    /// 通用 KD-Tree 实现。
+    /// KD-Tree 空间索引，支持泛型业务实体的最近邻检索、批量构建和插入。
     /// </summary>
-    /// <typeparam name="T">关联的数据类型。</typeparam>
+    /// <typeparam name="T">业务实体类型。</typeparam>
     public class KdTree<T>
     {
         private readonly int _dimensions;
@@ -145,36 +92,37 @@ namespace Noob.Algorithms.Maps
         /// <summary>
         /// 构造 KD-Tree。
         /// </summary>
-        /// <param name="dimensions">空间维度。</param>
+        /// <param name="dimensions">空间维度数。</param>
         /// <param name="vectorSelector">实体到向量的映射函数。</param>
         public KdTree(int dimensions, Func<T, KdVector> vectorSelector)
         {
-            if (dimensions < 1) throw new ArgumentException("维度必须为正整数", nameof(dimensions));
+            if (dimensions < 1)
+                throw new ArgumentException("维度必须大于0", nameof(dimensions));
             _dimensions = dimensions;
             _vectorSelector = vectorSelector ?? throw new ArgumentNullException(nameof(vectorSelector));
         }
 
         /// <summary>
-        /// 批量构建树。
+        /// 批量构建 KD-Tree。
         /// </summary>
-        /// <param name="items">初始元素集合。</param>
+        /// <param name="items">要索引的实体集合。</param>
         public void Build(IEnumerable<T> items)
         {
             var nodes = items.Select(item => new KdTreeNode<T>(_vectorSelector(item), item, 0)).ToList();
-            _root = BuildTree(nodes, 0);
+            _root = BuildRecursive(nodes, 0);
         }
 
         /// <summary>
-        /// 插入单个元素（递归插入）。
+        /// 插入单个实体（递归）。
         /// </summary>
         public void Insert(T item)
         {
             var node = new KdTreeNode<T>(_vectorSelector(item), item, 0);
-            _root = Insert(_root, node, 0);
+            _root = InsertRecursive(_root, node, 0);
         }
 
         /// <summary>
-        /// 查询最近邻。
+        /// 查找与目标向量最近的前 k 个实体。
         /// </summary>
         /// <param name="target">目标向量。</param>
         /// <param name="k">返回最近的k个结果。</param>
@@ -208,33 +156,79 @@ namespace Noob.Algorithms.Maps
         }
 
         /// <summary>
-        /// 内部递归构建树。
+        /// 内部递归建树。
         /// </summary>
-        private KdTreeNode<T> BuildTree(List<KdTreeNode<T>> nodes, int depth)
+        private KdTreeNode<T> BuildRecursive(List<KdTreeNode<T>> nodes, int depth)
         {
-            if (!nodes.Any()) return null;
+            if (nodes == null || nodes.Count == 0)
+                return null;
             int axis = depth % _dimensions;
             nodes.Sort((a, b) => a.Vector[axis].CompareTo(b.Vector[axis]));
             int median = nodes.Count / 2;
             var root = nodes[median];
             root.Axis = axis;
-            root.Left = BuildTree(nodes.Take(median).ToList(), depth + 1);
-            root.Right = BuildTree(nodes.Skip(median + 1).ToList(), depth + 1);
+            root.Left = BuildRecursive(nodes.Take(median).ToList(), depth + 1);
+            root.Right = BuildRecursive(nodes.Skip(median + 1).ToList(), depth + 1);
             return root;
         }
 
         /// <summary>
         /// 内部递归插入。
         /// </summary>
-        private KdTreeNode<T> Insert(KdTreeNode<T> current, KdTreeNode<T> node, int depth)
+        private KdTreeNode<T> InsertRecursive(KdTreeNode<T> current, KdTreeNode<T> node, int depth)
         {
-            if (current == null) { node.Axis = depth % _dimensions; return node; }
+            if (current == null)
+            {
+                node.Axis = depth % _dimensions;
+                return node;
+            }
             int axis = depth % _dimensions;
             if (node.Vector[axis] < current.Vector[axis])
-                current.Left = Insert(current.Left, node, depth + 1);
+                current.Left = InsertRecursive(current.Left, node, depth + 1);
             else
-                current.Right = Insert(current.Right, node, depth + 1);
+                current.Right = InsertRecursive(current.Right, node, depth + 1);
             return current;
+        }
+
+        /// <summary>
+        /// 距离+节点排序辅助类型（便于优先队列/排序）。
+        /// </summary>
+        public class DistanceNode<TN> : IComparable<DistanceNode<TN>>
+        {
+            /// <summary>
+            /// Gets the distance.
+            /// </summary>
+            /// <value>The distance.</value>
+            public double Distance { get; }
+            /// <summary>
+            /// Gets the node.
+            /// </summary>
+            /// <value>The node.</value>
+            public KdTreeNode<TN> Node { get; }
+
+            /// <summary>
+            /// Initializes a new instance of the <see cref="DistanceNode`1"/> class.
+            /// </summary>
+            /// <param name="distance">The distance.</param>
+            /// <param name="node">The node.</param>
+            public DistanceNode(double distance, KdTreeNode<TN> node)
+            {
+                Distance = distance;
+                Node = node;
+            }
+
+            /// <summary>
+            /// Compares the current instance with another object of the same type and returns an integer that indicates whether the current instance precedes, follows, or occurs in the same position in the sort order as the other object.
+            /// </summary>
+            /// <param name="other">An object to compare with this instance.</param>
+            /// <returns>A value that indicates the relative order of the objects being compared. The return value has these meanings:
+            /// <list type="table"><listheader><term> Value</term><description> Meaning</description></listheader><item><term> Less than zero</term><description> This instance precedes <paramref name="other" /> in the sort order.</description></item><item><term> Zero</term><description> This instance occurs in the same position in the sort order as <paramref name="other" />.</description></item><item><term> Greater than zero</term><description> This instance follows <paramref name="other" /> in the sort order.</description></item></list></returns>
+            public int CompareTo(DistanceNode<TN> other)
+            {
+                int cmp = Distance.CompareTo(other.Distance);
+                if (cmp == 0) cmp = Node.GetHashCode().CompareTo(other.Node.GetHashCode());
+                return cmp;
+            }
         }
     }
 
