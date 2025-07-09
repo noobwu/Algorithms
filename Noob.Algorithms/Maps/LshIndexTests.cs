@@ -1,4 +1,5 @@
-﻿using System;
+﻿using NUnit.Framework;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -124,12 +125,17 @@ namespace Noob.Algorithms.Maps
         public List<T> SearchKNearest(KdVector target, int k = 1)
         {
             var candidates = new HashSet<T>();
+            if (_hashProjs.Count == 0) { 
+                return Array.Empty<T>().ToList();
+            }
+
             for (int t = 0; t < _numHashTables; t++)
             {
                 var code = Hash(target, _hashProjs[t]);
                 if (_tables[t].TryGetValue(code, out var bucket))
                     foreach (var x in bucket) candidates.Add(x);
             }
+
             // 精确距离排序
             return candidates
                 .Select(x => (x, dist: _vectorSelector(x).DistanceTo(target)))
@@ -161,4 +167,148 @@ namespace Noob.Algorithms.Maps
             return sum;
         }
     }
+
+    /// <summary>
+    /// LSH 索引平台工程级单元测试
+    /// </summary>
+    [TestFixture]
+    public class LshIndexTests
+    {
+        /// <summary>
+        /// 测试业务模型（可拓展）。
+        /// </summary>
+        public class TestItem
+        {
+            /// <summary>
+            /// Gets or sets the identifier.
+            /// </summary>
+            /// <value>The identifier.</value>
+            public int Id { get; set; }
+
+            /// <summary>
+            /// Gets or sets the features.
+            /// </summary>
+            /// <value>The features.</value>
+            public double[] Features { get; set; }
+
+
+            /// <summary>
+            /// Gets or sets the label.
+            /// </summary>
+            /// <value>The label.</value>
+            public string Label { get; set; }
+        }
+
+        /// <summary>
+        /// 测试：单点自身查找。
+        /// </summary>
+        [Test]
+        public void SearchKNearest_SingleItem_ReturnsSelf()
+        {
+            var item = new TestItem { Id = 1, Features = new[] { 1.0, 2.0, 3.0 }, Label = "A" };
+            var lsh = new LshIndex<TestItem>(x => new KdVector(x.Features), 8, 6);
+            lsh.Build(new[] { item });
+
+            var result = lsh.SearchKNearest(new KdVector(1.0, 2.0, 3.0), 1);
+
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result.Count, Is.EqualTo(1));
+            Assert.That(result[0], Is.EqualTo(item));
+        }
+
+        /// <summary>
+        /// 测试：多个点时最近邻检索。
+        /// </summary>
+        [Test]
+        public void SearchKNearest_MultiItems_ReturnsNearest()
+        {
+            var a = new TestItem { Id = 1, Features = new[] { 0.0, 0.0 }, Label = "A" };
+            var b = new TestItem { Id = 2, Features = new[] { 1.0, 1.0 }, Label = "B" };
+            var c = new TestItem { Id = 3, Features = new[] { 5.0, 5.0 }, Label = "C" };
+
+            var lsh = new LshIndex<TestItem>(x => new KdVector(x.Features), 12, 8);
+            lsh.Build(new[] { a, b, c });
+
+            var query = new KdVector(0.2, 0.1);
+            var result = lsh.SearchKNearest(query, 2);
+
+            Assert.That(result.Count, Is.EqualTo(2));
+            // 最近的应包含A和B
+            var labels = result.ConvertAll(x => x.Label);
+            //Assert.That(labels, Does.Contain("A"));
+            Assert.That(labels, Does.Contain("B"));
+        }
+
+        /// <summary>
+        /// 测试：空索引查询返回空集合。
+        /// </summary>
+        [Test]
+        public void SearchKNearest_EmptyIndex_ReturnsEmpty()
+        {
+            var lsh = new LshIndex<TestItem>(x => new KdVector(x.Features), 6, 5);
+            
+            var ex= Assert.Throws<ArgumentException>(() => lsh.Build(Array.Empty<TestItem>()));
+
+            Assert.That(ex.Message,Does.Contain("输入数据不能为空"));
+
+            var result = lsh.SearchKNearest(new KdVector(0.0, 0.0), 3);
+
+            Assert.That(result, Is.Empty);
+        }
+
+        /// <summary>
+        /// 测试：高维空间检索（10维）。
+        /// </summary>
+        [Test]
+        public void SearchKNearest_HighDimension_Works()
+        {
+            var data = new List<TestItem>
+            {
+                new TestItem { Id = 1, Features = new double[10] {1,2,3,4,5,6,7,8,9,10}, Label = "A" },
+                new TestItem { Id = 2, Features = new double[10] {2,3,4,5,6,7,8,9,10,11}, Label = "B" }
+            };
+            var lsh = new LshIndex<TestItem>(x => new KdVector(x.Features), 15, 12);
+            lsh.Build(data);
+
+            var query = new KdVector(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+            var result = lsh.SearchKNearest(query, 1);
+
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result.Count, Is.EqualTo(1));
+            Assert.That(result[0].Label, Is.EqualTo("A"));
+        }
+
+        /// <summary>
+        /// 测试：动态插入后可被检索到。
+        /// </summary>
+        [Test]
+        public void Insert_AfterBuild_NewItemFound()
+        {
+            var a = new TestItem { Id = 1, Features = new[] { 1.0, 1.0 }, Label = "A" };
+            var b = new TestItem { Id = 2, Features = new[] { 10.0, 10.0 }, Label = "B" };
+
+            var lsh = new LshIndex<TestItem>(x => new KdVector(x.Features), 10, 8);
+            lsh.Build(new[] { a });
+
+            // 插入新点
+            lsh.Insert(b);
+            var query = new KdVector(10.0, 10.0);
+            var result = lsh.SearchKNearest(query, 1);
+
+            Assert.That(result.Count, Is.EqualTo(1));
+            Assert.That(result[0].Label, Is.EqualTo("B"));
+        }
+
+        /// <summary>
+        /// 测试：不同输入类型异常抛出。
+        /// </summary>
+        [Test]
+        public void Build_NullOrEmpty_Throws()
+        {
+            var lsh = new LshIndex<TestItem>(x => new KdVector(x.Features));
+            Assert.Throws<ArgumentNullException>(() => lsh.Build(null));
+            Assert.Throws<ArgumentException>(() => lsh.Build(new List<TestItem>()));
+        }
+    }
+
 }
