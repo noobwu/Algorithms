@@ -154,7 +154,7 @@ namespace Noob.Algorithms.Trees
         }
 
         /// <summary>
-        /// 中序遍历（返回有序序列）
+        /// 中序遍历（左-根-右）：用于二叉查找树，结果有序
         /// </summary>
         public List<T> InOrder()
         {
@@ -164,7 +164,7 @@ namespace Noob.Algorithms.Trees
         }
 
         /// <summary>
-        /// 中序遍历
+        /// 中序遍历（左-根-右）：用于二叉查找树，结果有序
         /// </summary>
         /// <param name="node"></param>
         /// <param name="result"></param>
@@ -177,7 +177,7 @@ namespace Noob.Algorithms.Trees
         }
 
         /// <summary>
-        /// 前序遍历
+        /// 前序遍历（根-左-右）：可用于表达式树构建、复制树结构
         /// </summary>
         public List<T> PreOrder()
         {
@@ -187,7 +187,7 @@ namespace Noob.Algorithms.Trees
         }
 
         /// <summary>
-        /// 前序遍历
+        /// 前序遍历（根-左-右）：可用于表达式树构建、复制树结构
         /// </summary>
         private void PreOrder(BinaryTreeNode<T> node, List<T> result)
         {
@@ -198,7 +198,7 @@ namespace Noob.Algorithms.Trees
         }
 
         /// <summary>
-        /// 后序遍历
+        /// 后序遍历（左-右-根）：适合节点删除、表达式求值
         /// </summary>
         public List<T> PostOrder()
         {
@@ -208,7 +208,7 @@ namespace Noob.Algorithms.Trees
         }
 
         /// <summary>
-        /// 后序遍历
+        /// 后序遍历（左-右-根）：适合节点删除、表达式求值
         /// </summary>
         private void PostOrder(BinaryTreeNode<T> node, List<T> result)
         {
@@ -219,7 +219,7 @@ namespace Noob.Algorithms.Trees
         }
 
         /// <summary>
-        /// 层序遍历（广度优先）
+        /// 层序遍历（广度优先）：按层访问，常用于序列化/反序列化
         /// </summary>
         public List<T> LevelOrder()
         {
