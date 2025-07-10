@@ -59,11 +59,11 @@ namespace Noob.Algorithms.Trees
                 Parent = parent;
             }
             /// <summary>
-            /// 节点是否红色。
+            /// 节点是否红色节点。
             /// </summary>
             public bool IsRed => NodeColor == Color.Red;
             // <summary>
-            /// 节点是否黑色。
+            /// 节点是否黑色节点。
             /// </summary>
             public bool IsBlack => NodeColor == Color.Black;
         }
