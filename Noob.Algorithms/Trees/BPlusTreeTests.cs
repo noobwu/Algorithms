@@ -233,24 +233,27 @@ namespace Noob.Algorithms.Trees
         private void SplitInternal(BPlusTreeNode<K, V> node)
         {
             int mid = node.Keys.Count / 2;
+            K upKey = node.Keys[mid];
+
             var newNode = new BPlusTreeNode<K, V>(BPlusTreeNodeType.Internal)
             {
                 Parent = node.Parent
             };
-            // 新节点key和孩子
+
+            // 新节点key和孩子（右半部分，key不含mid）
             newNode.Keys.AddRange(node.Keys.GetRange(mid + 1, node.Keys.Count - (mid + 1)));
             newNode.Children.AddRange(node.Children.GetRange(mid + 1, node.Children.Count - (mid + 1)));
 
-            // 原节点key和孩子
-            node.Keys.RemoveRange(mid, node.Keys.Count - mid);
-            node.Children.RemoveRange(mid + 1, node.Children.Count - (mid + 1));
+            // 原节点key和孩子（左半部分，key不含mid右侧）
+            node.Keys.RemoveRange(mid, node.Keys.Count - mid); // mid之后都删
+            node.Children.RemoveRange(mid + 1, node.Children.Count - (mid + 1)); // mid+1之后都删
 
-            // 更新子节点父指针
+            // 子节点父指针更新
             foreach (var child in newNode.Children)
                 child.Parent = newNode;
 
-            // 向上插入
-            InsertIntoParent(node, node.Keys[mid], newNode);
+            // 插入到父节点（upKey是被提升的key，右侧新节点）
+            InsertIntoParent(node, upKey, newNode);
         }
 
         /// <summary>
@@ -279,8 +282,6 @@ namespace Noob.Algorithms.Trees
             if (parent.Keys.Count >= Order)
                 SplitInternal(parent);
         }
-
-        // 你可以继续补充删除、批量构建、持久化等工程功能
 
         /// <summary>
         /// 删除指定Key，若不存在则无操作
@@ -491,6 +492,7 @@ namespace Noob.Algorithms.Trees
             BPlusTreeNode<K, V> prev = null;
             void Traverse(BPlusTreeNode<K, V> node)
             {
+                if (node == null) return;
                 if (node.NodeType == BPlusTreeNodeType.Leaf)
                 {
                     if (prev != null)
@@ -503,7 +505,7 @@ namespace Noob.Algorithms.Trees
                         Traverse(child);
                 }
             }
-            Traverse(this.Root);
+            Traverse(Root);
         }
 
     }
