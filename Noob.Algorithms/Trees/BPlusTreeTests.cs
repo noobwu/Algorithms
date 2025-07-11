@@ -616,15 +616,16 @@ namespace Noob.Algorithms.Trees
         [Test]
         public void SaveToFile_And_LoadFromFile_RestoreState()
         {
-            var file = Path.GetTempFileName();
+            var filePath = Path.GetTempFileName();
+            //filePath = $"{AppDomain.CurrentDomain.BaseDirectory}\\{Guid.NewGuid().ToString("N")}.json";
             try
             {
                 var tree1 = new BPlusTree<int, string>(4);
                 for (int i = 1; i <= 20; i++)
                     tree1.Insert(i, $"T{i}");
-                tree1.SaveToFile(file);
+                tree1.SaveToFile(filePath);
 
-                var tree2 = BPlusTree<int, string>.LoadFromFile(file);
+                var tree2 = BPlusTree<int, string>.LoadFromFile(filePath);
 
                 for (int i = 1; i <= 20; i++)
                     Assert.That(tree2.Search(i), Is.EqualTo($"T{i}"));
@@ -632,7 +633,7 @@ namespace Noob.Algorithms.Trees
             }
             finally
             {
-                if (File.Exists(file)) File.Delete(file);
+                if (File.Exists(filePath)) File.Delete(filePath);
             }
         }
 
@@ -645,9 +646,9 @@ namespace Noob.Algorithms.Trees
             var tree = new BPlusTree<int, string>(4);
             for (int i = 1; i <= 12; i++)
                 tree.Insert(i, $"N{i}");
-            var file = Path.GetTempFileName();
-            tree.SaveToFile(file);
-            var loaded = BPlusTree<int, string>.LoadFromFile(file);
+            var filePath = Path.GetTempFileName();
+            tree.SaveToFile(filePath);
+            var loaded = BPlusTree<int, string>.LoadFromFile(filePath);
 
             // 检查叶链表按顺序遍历所有key
             var allKeys = new List<int>();
@@ -661,7 +662,7 @@ namespace Noob.Algorithms.Trees
                 node = node.NextLeaf;
             }
             Assert.That(allKeys, Is.EqualTo(new List<int> { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 }));
-            File.Delete(file);
+            File.Delete(filePath);
         }
     }
 
