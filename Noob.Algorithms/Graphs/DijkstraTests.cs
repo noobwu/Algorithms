@@ -53,7 +53,7 @@ namespace Noob.Algorithms.Graphs
         /// <summary>实时权重调整（如拥堵/封路）</summary>
         public bool IsOpen { get; set; } = true;
 
-        /// <summary>拥堵度（0-1）</summary>
+        /// <summary>拥堵度</summary>
         public double Congestion { get; set; } = 1.0;
         // 可扩展更多属性
     }
