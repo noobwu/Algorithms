@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Noob.Algorithms.Trees
+namespace Noob.Algorithms.Graphs
 {
     using NUnit.Framework;
     using System;
@@ -346,7 +346,7 @@ namespace Noob.Algorithms.Trees
 
             // Act
             var result = AStarPathfinder.FindKNearestStations(
-                (SpatialNode)g.Nodes[0],
+                g.Nodes[0],
                 g.Nodes.Values.Where(n => n.Category == "加油站"),
                 g, 3);
 
@@ -376,11 +376,11 @@ namespace Noob.Algorithms.Trees
             int stationCount = 10;
             for (int i = 0; i < nodeCount; i++)
             {
-                g.AddNode(new SpatialNode { Id = i, Longitude = 113 + i * 0.0001, Latitude = 22.5 + (i % 5) * 0.0002, Category = (i % 10 == 0) ? "加油站" : "路口" });
+                g.AddNode(new SpatialNode { Id = i, Longitude = 113 + i * 0.0001, Latitude = 22.5 + i % 5 * 0.0002, Category = i % 10 == 0 ? "加油站" : "路口" });
             }
             // 连环路+部分高拥堵、断路
             for (int i = 0; i < nodeCount - 1; i++)
-                g.AddEdge(i, i + 1, 100, (i % 17 == 0) ? 5.0 : 1.0, (i % 23 != 0));
+                g.AddEdge(i, i + 1, 100, i % 17 == 0 ? 5.0 : 1.0, i % 23 != 0);
             g.AddEdge(nodeCount - 1, 0, 120, 1.0, true); // 闭环
 
             var start = g.Nodes[1];
@@ -389,7 +389,7 @@ namespace Noob.Algorithms.Trees
 
             // Act
             var result = AStarPathfinder.FindKNearestStations(
-                (SpatialNode)start,
+                start,
                 stations,
                 g, k);
 
