@@ -15,6 +15,10 @@ namespace Noob.Algorithms.Graphs
         /// <summary>
         /// Bellman-Ford 单源最短路径（支持负权边/检测负权环/支持动态权重委托）
         /// </summary>
+        /// <param name="start">The start.</param>
+        /// <param name="graph">The graph.</param>
+        /// <param name="getWeight">The get weight.</param>
+        /// <returns>System.ValueTuple&lt;Dictionary&lt;System.Int32, System.Double&gt;, Dictionary&lt;System.Int32, System.Int32&gt;, System.Boolean&gt;.</returns>
         public static (Dictionary<int, double> dist, Dictionary<int, int> prev, bool hasNegativeCycle)
             FindShortestPaths(
                 GraphNode start,
@@ -320,6 +324,29 @@ namespace Noob.Algorithms.Graphs
             Assert.That(result[1].Dist, Is.EqualTo(2));
             Assert.That(result.All(x => x.Target.Category == "加油站"));
             Assert.That(result.All(x => x.Path.First().Id == 0));
+        }
+
+        /// <summary>
+        /// FindShortestPaths（负权回路）检测和标志返回
+        /// </summary>
+        [Test]
+        public void FindShortestPaths_NegativeCycle_ResultBehavior()
+        {
+            var nodes = new Dictionary<int, GraphNode>
+            {
+                [0] = new TestNode { Id = 0 },
+                [1] = new TestNode { Id = 1 },
+                [2] = new TestNode { Id = 2 }
+            };
+            nodes[0].Neighbors.Add(new TestEdge { TargetNodeId = 1, Weight = 2 });
+            nodes[1].Neighbors.Add(new TestEdge { TargetNodeId = 2, Weight = -4 });
+            nodes[2].Neighbors.Add(new TestEdge { TargetNodeId = 0, Weight = -1 });
+
+            // 是否有负权回路
+            var (dist, prev, hasNegativeCycle) = BellmanFordPathfinder.FindShortestPaths(nodes[0], nodes);
+            Assert.That(hasNegativeCycle, Is.True);
+            // 距离不能保证为最优，路径不可用
+            Assert.That(() => BellmanFordPathfinder.ReconstructPath(2, prev, nodes), Throws.Nothing); // 不抛异常，但结果无意义
         }
     }
 
