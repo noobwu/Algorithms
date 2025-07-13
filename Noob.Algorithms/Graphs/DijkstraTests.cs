@@ -8,29 +8,7 @@ using System.Threading.Tasks;
 namespace Noob.Algorithms.Graphs
 {
 
-    /// <summary>
-    /// 图节点，支持任意业务属性扩展
-    /// </summary>
-    public class GraphNode
-    {
-        /// <summary>节点唯一ID</summary>
-        public int Id { get; set; }
 
-        /// <summary>邻接边集合</summary>
-        public List<GraphEdge> Neighbors { get; } = new List<GraphEdge>();
-    }
-
-    /// <summary>
-    /// 图边，支持权重（距离/耗时/费用等）
-    /// </summary>
-    public class GraphEdge
-    {
-        /// <summary>目标节点ID</summary>
-        public int TargetNodeId { get; set; }
-
-        /// <summary>边权重（必须非负）</summary>
-        public double Weight { get; set; }
-    }
 
     /// <summary>
     /// 支持复杂业务属性的节点（如坐标、类型、动态属性）
@@ -53,8 +31,8 @@ namespace Noob.Algorithms.Graphs
         /// <summary>实时权重调整（如拥堵/封路）</summary>
         public bool IsOpen { get; set; } = true;
 
-        /// <summary>拥堵度</summary>
-        public double Congestion { get; set; } = 1.0;
+        /// <summary>动态权重因子（如拥堵、施工系数）</summary>
+        public double Factor  { get; set; } = 1.0;
         // 可扩展更多属性
     }
 
@@ -273,14 +251,14 @@ namespace Noob.Algorithms.Graphs
             for (int i = 1; i <= 5; i++)
                 nodes[0].Neighbors.Add(new TestEdge { TargetNodeId = i, Weight = i }); // 1~5 距离
                                                                                        // 加油站之间增加高拥堵边（仅部分有效）
-            nodes[1].Neighbors.Add(new TestEdge { TargetNodeId = 2, Weight = 1, Congestion = 3.0, IsOpen = true });
+            nodes[1].Neighbors.Add(new TestEdge { TargetNodeId = 2, Weight = 1, Factor  = 3.0, IsOpen = true });
             // 禁行边
             nodes[1].Neighbors.Add(new TestEdge { TargetNodeId = 3, Weight = 1, IsOpen = false });
 
             // Act
             var result = DijkstraPathfinder.FindKNearestTargets(
                 (TestNode)nodes[0], stations, nodes, 3,
-                e => (e as TestEdge)?.IsOpen == false ? double.MaxValue : e.Weight * ((e as TestEdge)?.Congestion ?? 1.0)
+                e => (e as TestEdge)?.IsOpen == false ? double.MaxValue : e.Weight * ((e as TestEdge)?.Factor  ?? 1.0)
             );
 
             // Assert
