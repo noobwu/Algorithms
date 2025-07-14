@@ -14,6 +14,16 @@ namespace Noob.Algorithms.Sorts
     /// </summary>
     public static class QuickSorter
     {
+
+        /// <summary>
+        /// 基础快速排序（原理清晰，适合教学和小数据）
+        /// </summary>
+        public static void BasicQuickSort<T>(T[] arr, IComparer<T> comparer = null)
+        {
+            comparer ??= Comparer<T>.Default;
+            BasicQuickSortInternal(arr, 0, arr.Length - 1, comparer);
+        }
+
         /// <summary>
         /// 随机化三路快排：对大批量重复元素/极端输入有健壮性保障
         /// </summary>
@@ -25,51 +35,50 @@ namespace Noob.Algorithms.Sorts
             if (arr == null) throw new ArgumentNullException(nameof(arr));
             comparer ??= Comparer<T>.Default;
             var rand = new Random();
-            QuickSortInternal(arr, 0, arr.Length - 1, comparer, rand);
+            QuickSortInternal(arr, 0, arr.Length - 1, comparer,rand);
         }
 
         /// <summary>
-        /// 内省排序：当递归过深自动切堆排序，保障最坏 O(nlogn)
+        /// Basics the quick sort internal.
         /// </summary>
-        /// <typeparam name="T">元素类型</typeparam>
-        /// <param name="arr">待排序数组</param>
-        /// <param name="comparer">可选自定义比较器</param>
-        public static void IntroSort<T>(T[] arr, IComparer<T> comparer = null)
+        /// <typeparam name="T"></typeparam>
+        /// <param name="arr">The arr.</param>
+        /// <param name="left">The left.</param>
+        /// <param name="right">The right.</param>
+        /// <param name="cmp">The CMP.</param>
+        private static void BasicQuickSortInternal<T>(T[] arr, int left, int right, IComparer<T> cmp)
         {
-            if (arr == null) throw new ArgumentNullException(nameof(arr));
-            comparer ??= Comparer<T>.Default;
-            int depthLimit = 2 * (int)Math.Log(arr.Length + 1, 2); // 理论最深递归层数
-            var rand = new Random();
-            IntroSortInternal(arr, 0, arr.Length - 1, comparer, rand, depthLimit);
+            if (left >= right) return;
+            int pivotIdx = Partition(arr, left, right, cmp);
+            BasicQuickSortInternal(arr, left, pivotIdx - 1, cmp);
+            BasicQuickSortInternal(arr, pivotIdx + 1, right, cmp);
         }
 
         /// <summary>
-        /// 稳定快速排序：对任意类型支持稳定排序（相等元素原始顺序不变）
-        /// 通过二次比较“元素值+原始下标”实现
+        /// Lomuto分区，返回基准元素最终位置    
         /// </summary>
-        /// <typeparam name="T">元素类型</typeparam>
-        /// <param name="arr">待排序数组</param>
-        /// <param name="comparer">自定义比较器，默认升序</param>
-        public static void StableQuickSort<T>(T[] arr, IComparer<T> comparer = null)
+        /// <typeparam name="T"></typeparam>
+        /// <param name="arr">The arr.</param>
+        /// <param name="left">The left.</param>
+        /// <param name="right">The right.</param>
+        /// <param name="cmp">The CMP.</param>
+        /// <returns>System.Int32.</returns>
+        private static int Partition<T>(T[] arr, int left, int right, IComparer<T> cmp)
         {
-            if (arr == null) throw new ArgumentNullException(nameof(arr));
-            comparer ??= Comparer<T>.Default;
-            var pairs = new StablePair<T>[arr.Length];
-            for (int i = 0; i < arr.Length; i++)
-                pairs[i] = new StablePair<T> { Value = arr[i], Index = i };
-
-            QuickSortInternal(pairs, 0, pairs.Length - 1,
-                Comparer<StablePair<T>>.Create((a, b) =>
+            T pivot = arr[right];
+            int i = left;
+            for (int j = left; j < right; j++)
+            {
+                if (cmp.Compare(arr[j], pivot) < 0)
                 {
-                    int cmp = comparer.Compare(a.Value, b.Value);
-                    // 稳定性关键：值相等时按原始下标排序
-                    return cmp != 0 ? cmp : a.Index.CompareTo(b.Index);
-                }),
-                new Random());
-
-            for (int i = 0; i < arr.Length; i++)
-                arr[i] = pairs[i].Value;
+                    Swap(arr, i, j);
+                    i++;
+                }
+            }
+            Swap(arr, i, right);
+            return i;
         }
+
 
 
         /// <summary>
@@ -110,6 +119,21 @@ namespace Noob.Algorithms.Sorts
                     right = lt - 1;
                 }
             }
+        }
+
+        /// <summary>
+        /// 内省排序：当递归过深自动切堆排序，保障最坏 O(nlogn)
+        /// </summary>
+        /// <typeparam name="T">元素类型</typeparam>
+        /// <param name="arr">待排序数组</param>
+        /// <param name="comparer">可选自定义比较器</param>
+        public static void IntroSort<T>(T[] arr, IComparer<T> comparer = null)
+        {
+            if (arr == null) throw new ArgumentNullException(nameof(arr));
+            comparer ??= Comparer<T>.Default;
+            int depthLimit = 2 * (int)Math.Log(arr.Length + 1, 2); // 理论最深递归层数
+            var rand = new Random();
+            IntroSortInternal(arr, 0, arr.Length - 1, comparer, rand, depthLimit);
         }
 
         /// <summary>
@@ -157,6 +181,37 @@ namespace Noob.Algorithms.Sorts
                 }
             }
         }
+
+
+        /// <summary>
+        /// 稳定快速排序：对任意类型支持稳定排序（相等元素原始顺序不变）
+        /// 通过二次比较“元素值+原始下标”实现
+        /// </summary>
+        /// <typeparam name="T">元素类型</typeparam>
+        /// <param name="arr">待排序数组</param>
+        /// <param name="comparer">自定义比较器，默认升序</param>
+        public static void StableQuickSort<T>(T[] arr, IComparer<T> comparer = null)
+        {
+            if (arr == null) throw new ArgumentNullException(nameof(arr));
+            comparer ??= Comparer<T>.Default;
+            var pairs = new StablePair<T>[arr.Length];
+            for (int i = 0; i < arr.Length; i++)
+                pairs[i] = new StablePair<T> { Value = arr[i], Index = i };
+
+            QuickSortInternal(pairs, 0, pairs.Length - 1,
+                Comparer<StablePair<T>>.Create((a, b) =>
+                {
+                    int cmp = comparer.Compare(a.Value, b.Value);
+                    // 稳定性关键：值相等时按原始下标排序
+                    return cmp != 0 ? cmp : a.Index.CompareTo(b.Index);
+                }),
+                new Random());
+
+            for (int i = 0; i < arr.Length; i++)
+                arr[i] = pairs[i].Value;
+        }
+
+
 
         /// <summary>
         /// 原地堆排序（用于内省排序切换，支持区间）
@@ -237,6 +292,18 @@ namespace Noob.Algorithms.Sorts
         [TestFixture]
         public class QuickSorterTests
         {
+            /// <summary>
+            /// 基础快排-整数升序
+            /// </summary>
+            [Test]
+            public void BasicQuickSort_IntArray_ShouldSortAscending()
+            {
+                var arr = new[] { 7, 3, 1, 8, 2, 4 };
+                QuickSorter.BasicQuickSort(arr);
+                Assert.That(arr, Is.EqualTo(new[] { 1, 2, 3, 4, 7, 8 }));
+            }
+
+
             /// <summary>
             /// 标准三路快排：整数数组升序排序
             /// </summary>
