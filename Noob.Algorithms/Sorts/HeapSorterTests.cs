@@ -34,6 +34,42 @@ namespace Noob.Algorithms.Sorts
         }
 
         /// <summary>
+        /// 堆化操作（大顶堆/自定义比较器）
+        /// </summary>
+        /// <param name="list">列表</param>
+        /// <param name="heapSize">当前堆大小</param>
+        /// <param name="rootIndex">根节点索引</param>
+        /// <param name="comparer">自定义比较器</param>
+        private static void Heapify<T>(IList<T> list, int heapSize, int rootIndex, IComparer<T> comparer)
+        {
+            int largest = rootIndex;
+            int left = 2 * rootIndex + 1, right = 2 * rootIndex + 2;
+            if (left < heapSize && comparer.Compare(list[left], list[largest]) > 0)
+                largest = left;
+            if (right < heapSize && comparer.Compare(list[right], list[largest]) > 0)
+                largest = right;
+            if (largest != rootIndex)
+            {
+                Swap(list, rootIndex, largest);
+                Heapify(list, heapSize, largest, comparer);
+            }
+        }
+
+        /// <summary>
+        /// 元素交换辅助
+        /// </summary>
+        /// <param name="list">列表</param>
+        /// <param name="i">索引i</param>
+        /// <param name="j">索引j</param>
+        private static void Swap<T>(IList<T> list, int i, int j)
+        {
+            if (i == j) return;
+            T t = list[i];
+            list[i] = list[j];
+            list[j] = t;
+        }
+
+        /// <summary>
         /// TopK：从列表中取前K大（或K小）元素，复杂度O(NlogK)，结果无序。
         /// 若K≥N，等价于全量堆排序。
         /// </summary>
@@ -95,41 +131,7 @@ namespace Noob.Algorithms.Sorts
                 list[i] = pairs[i].Value;
         }
 
-        /// <summary>
-        /// 堆化操作（大顶堆/自定义比较器）
-        /// </summary>
-        /// <param name="list">列表</param>
-        /// <param name="heapSize">当前堆大小</param>
-        /// <param name="rootIndex">根节点索引</param>
-        /// <param name="comparer">自定义比较器</param>
-        private static void Heapify<T>(IList<T> list, int heapSize, int rootIndex, IComparer<T> comparer)
-        {
-            int largest = rootIndex;
-            int left = 2 * rootIndex + 1, right = 2 * rootIndex + 2;
-            if (left < heapSize && comparer.Compare(list[left], list[largest]) > 0)
-                largest = left;
-            if (right < heapSize && comparer.Compare(list[right], list[largest]) > 0)
-                largest = right;
-            if (largest != rootIndex)
-            {
-                Swap(list, rootIndex, largest);
-                Heapify(list, heapSize, largest, comparer);
-            }
-        }
 
-        /// <summary>
-        /// 元素交换辅助
-        /// </summary>
-        /// <param name="list">列表</param>
-        /// <param name="i">索引i</param>
-        /// <param name="j">索引j</param>
-        private static void Swap<T>(IList<T> list, int i, int j)
-        {
-            if (i == j) return;
-            T t = list[i];
-            list[i] = list[j];
-            list[j] = t;
-        }
 
         /// <summary>
         /// 稳定堆排序用封装类型
