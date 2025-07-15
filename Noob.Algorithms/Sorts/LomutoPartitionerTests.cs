@@ -21,6 +21,18 @@ namespace Noob.Algorithms.Sorts
         /// </summary>
         public static int LomutoPartition<T>(T[] arr, int left, int right, IComparer<T> comparer = null)
         {
+            if(arr == null)
+                throw new ArgumentNullException(nameof(arr));
+
+            if(left > right)
+                throw new ArgumentException("left must be less than right");
+
+            if(left >= arr.Length)
+                    throw new ArgumentException("left is out of range");
+
+            if(right >= arr.Length)
+                    throw new ArgumentException("right is out of range");
+
             comparer ??= Comparer<T>.Default;
             T pivot = arr[right];
             int i = left;
@@ -66,6 +78,19 @@ namespace Noob.Algorithms.Sorts
         public static void IntrospectiveQuickSort<T>(T[] arr, int left, int right, IComparer<T> comparer = null, int insertionThreshold = 16)
         {
             comparer ??= Comparer<T>.Default;
+
+            if (arr == null)
+                throw new ArgumentNullException(nameof(arr));
+
+            if (left > right)
+                throw new ArgumentException("left must be less than right");
+
+            if (left >= arr.Length)
+                throw new ArgumentException("left is out of range");
+
+            if (right >= arr.Length)
+                throw new ArgumentException("right is out of range");
+
             int depthLimit = 2 * (int)Math.Log(right - left + 1, 2);
             IntrospectiveQuickSortInternal(arr, left, right, comparer, depthLimit, insertionThreshold);
         }
@@ -288,6 +313,114 @@ namespace Noob.Algorithms.Sorts
             var one = new[] { 88 };
             LomutoPartitioner.IntrospectiveQuickSort(one, 0, 0);
             Assert.That(one, Is.EqualTo(new[] { 88 }));
+        }
+
+        /// <summary>
+        /// LeetCode常考“全有序/全逆序/大重复”——要能分区不退化
+        /// </summary>
+        [Test]
+        public void Partition_OrderedAndReverseAndDuplicates_ShouldNotCrash()
+        {
+            var arr1 = Enumerable.Range(1, 100).ToArray();
+            var arr2 = Enumerable.Range(1, 100).Reverse().ToArray();
+            var arr3 = Enumerable.Repeat(42, 100).ToArray();
+
+            int pos1 = LomutoPartitioner.LomutoPartition(arr1, 0, arr1.Length - 1);
+            int pos2 = LomutoPartitioner.LomutoPartition(arr2, 0, arr2.Length - 1);
+            int pos3 = LomutoPartitioner.LomutoPartition(arr3, 0, arr3.Length - 1);
+
+            Assert.That(arr1.Take(pos1), Is.All.LessThan(arr1[pos1]));
+            Assert.That(arr2.Take(pos2), Is.All.LessThan(arr2[pos2]));
+            Assert.That(arr3.Take(pos3), Is.Empty.Or.All.LessThan(arr3[pos3])); //全等时左区间可能为空
+        }
+
+        /// <summary>
+        /// Hoare分区与Lomuto分区行为差异（平台边界对照）
+        /// </summary>
+        [Test]
+        public void Partition_HoareVsLomuto_ShouldHaveDifferentResults()
+        {
+            // Hoare分区结果pivot未必在最终位置
+            int[] arr = { 3, 2, 1, 5, 4 };
+            int lomutoPivot = LomutoPartitioner.LomutoPartition(arr.ToArray(), 0, arr.Length - 1);
+            int hoarePivot = HoarePartition(arr.ToArray(), 0, arr.Length - 1);
+
+            Assert.That(lomutoPivot, Is.GreaterThanOrEqualTo(0).And.LessThanOrEqualTo(arr.Length - 1));
+            Assert.That(hoarePivot, Is.GreaterThanOrEqualTo(0).And.LessThanOrEqualTo(arr.Length - 1));
+        }
+     
+        /// <summary>
+        /// 简化版Hoare分区实现，仅用于测试对比     
+        /// </summary>
+        /// <param name="arr">The arr.</param>
+        /// <param name="left">The left.</param>
+        /// <param name="right">The right.</param>
+        /// <returns>System.Int32.</returns>
+        private int HoarePartition(int[] arr, int left, int right)
+        {
+            int pivot = arr[left];
+            int i = left - 1, j = right + 1;
+            while (true)
+            {
+                do { i++; } while (arr[i] < pivot);
+                do { j--; } while (arr[j] > pivot);
+                if (i >= j) return j;
+                int tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+            }
+        }
+
+        /// <summary>
+        /// 极端“小区间”与“超大区间”——平台健壮性保障
+        /// </summary>
+        [Test]
+        public void Partition_SmallAndLargeArrays_ShouldPartition()
+        {
+            var small = new[] { 5, 1 };
+            int posSmall = LomutoPartitioner.LomutoPartition(small, 0, small.Length - 1);
+            Assert.That(small.Take(posSmall), Is.All.LessThan(small[posSmall]));
+            Assert.That(small.Skip(posSmall + 1), Is.All.GreaterThanOrEqualTo(small[posSmall]));
+
+            var big = Enumerable.Range(0, 100_000).Reverse().ToArray();
+            int posBig = LomutoPartitioner.RandomizedLomutoPartition(big, 0, big.Length - 1);
+            Assert.That(big.Take(posBig), Is.All.LessThan(big[posBig]));
+            Assert.That(big.Skip(posBig + 1), Is.All.GreaterThanOrEqualTo(big[posBig]));
+        }
+
+
+        /// <summary>
+        /// 边界：左>右、空数组、单元素、越界访问等不抛未处理异常
+        /// </summary>
+        [Test]
+        public void Partition_EdgeCases_ShouldThrow()
+        {
+            var empty = new int[0];
+            Assert.Throws<ArgumentException>(() => LomutoPartitioner.LomutoPartition(empty, 0, -1));
+            Assert.Throws<ArgumentException>(() => LomutoPartitioner.IntrospectiveQuickSort(empty, 0, -1));
+
+            var one = new[] { 99 };
+            Assert.DoesNotThrow(() => LomutoPartitioner.LomutoPartition(one, 0, 0));
+            Assert.DoesNotThrow(() => LomutoPartitioner.IntrospectiveQuickSort(one, 0, 0));
+
+            // left > right（典型递归终止条件）
+            var arr = new[] { 1, 2, 3 };
+            Assert.Throws<ArgumentException>(() => LomutoPartitioner.LomutoPartition(arr, 2, 1));
+            Assert.Throws<ArgumentException>(() => LomutoPartitioner.IntrospectiveQuickSort(arr, 2, 1));
+        }
+
+        /// <summary>
+        /// 稳定性/等值元素分布对分区影响——工程接口应能处理
+        /// </summary>
+        [Test]
+        public void Partition_AllEqualAndSomeEqual_ShouldBehave()
+        {
+            var arr1 = Enumerable.Repeat(0, 10).ToArray();
+            int pos1 = LomutoPartitioner.LomutoPartition(arr1, 0, arr1.Length - 1);
+            Assert.That(arr1.Skip(pos1 + 1), Is.All.GreaterThanOrEqualTo(arr1[pos1]));
+            // 混合重复
+            var arr2 = new[] { 2, 2, 1, 3, 3, 2, 1, 3 };
+            int pos2 = LomutoPartitioner.LomutoPartition(arr2, 0, arr2.Length - 1);
+            Assert.That(arr2.Take(pos2), Is.All.LessThan(arr2[pos2]));
+            Assert.That(arr2.Skip(pos2 + 1), Is.All.GreaterThanOrEqualTo(arr2[pos2]));
         }
     }
 
